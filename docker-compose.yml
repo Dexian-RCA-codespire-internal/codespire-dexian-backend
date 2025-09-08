@@ -1,0 +1,147 @@
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: dexcian-backend-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-testbg}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: dexcian-backend-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # SuperTokens Core
+  supertokens:
+    image: registry.supertokens.io/supertokens/supertokens-postgresql:7.0
+    container_name: dexcian-backend-supertokens
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_CONNECTION_URI: postgresql://${POSTGRES_USER:-supertokens}:${POSTGRES_PASSWORD:-supertokens123}@postgres:5432/${POSTGRES_DB:-supertokens}
+    ports:
+      - "3567:3567"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3567/hello"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL for SuperTokens
+  postgres:
+    image: postgres:15-alpine
+    container_name: dexcian-backend-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-supertokens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supertokens123}
+      POSTGRES_DB: ${POSTGRES_DB:-supertokens}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supertokens}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Azure Storage Emulator (Azurite)
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: dexcian-backend-azurite
+    restart: unless-stopped
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /workspace --debug /workspace/debug.log
+    ports:
+      - "10000:10000"  # Blob service
+      - "10001:10001"  # Queue service
+      - "10002:10002"  # Table service
+    volumes:
+      - azurite_data:/workspace
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10000/devstoreaccount1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # AWS S3 LocalStack (for local S3 development)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: dexcian-backend-localstack
+    restart: unless-stopped
+    environment:
+      SERVICES: s3
+      DEBUG: 1
+      DATA_DIR: /tmp/localstack/data
+      DOCKER_HOST: unix:///var/run/docker.sock
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      PERSISTENCE: 1
+    ports:
+      - "4566:4566"  # LocalStack
+    volumes:
+      - localstack_data:/tmp/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dexcian-backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  azurite_data:
+    driver: local
+  localstack_data:
+    driver: local
+
+networks:
+  dexcian-backend-network:
+    driver: bridge
