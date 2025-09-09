@@ -2,7 +2,7 @@ services:
   # MongoDB Database
   mongodb:
     image: mongo:7.0
-    container_name: dexcian-backend-mongodb
+    container_name: dexian-backend-mongodb
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
@@ -13,7 +13,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 30s
@@ -23,7 +23,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7.2-alpine
-    container_name: dexcian-backend-redis
+    container_name: dexian-backend-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
     ports:
@@ -31,7 +31,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
       interval: 30s
@@ -41,7 +41,7 @@ services:
   # SuperTokens Core
   supertokens:
     image: registry.supertokens.io/supertokens/supertokens-postgresql:7.0
-    container_name: dexcian-backend-supertokens
+    container_name: dexian-backend-supertokens
     restart: unless-stopped
     environment:
       POSTGRESQL_CONNECTION_URI: postgresql://${POSTGRES_USER:-supertokens}:${POSTGRES_PASSWORD:-supertokens123}@postgres:5432/${POSTGRES_DB:-supertokens}
@@ -51,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3567/hello"]
       interval: 30s
@@ -61,7 +61,7 @@ services:
   # PostgreSQL for SuperTokens
   postgres:
     image: postgres:15-alpine
-    container_name: dexcian-backend-postgres
+    container_name: dexian-backend-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-supertokens}
@@ -72,7 +72,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supertokens}"]
       interval: 30s
@@ -82,7 +82,7 @@ services:
   # Azure Storage Emulator (Azurite)
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    container_name: dexcian-backend-azurite
+    container_name: dexian-backend-azurite
     restart: unless-stopped
     command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /workspace --debug /workspace/debug.log
     ports:
@@ -92,7 +92,7 @@ services:
     volumes:
       - azurite_data:/workspace
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10000/devstoreaccount1 || exit 1"]
       interval: 30s
@@ -103,7 +103,7 @@ services:
   # AWS S3 LocalStack (for local S3 development)
   localstack:
     image: localstack/localstack:latest
-    container_name: dexcian-backend-localstack
+    container_name: dexian-backend-localstack
     restart: unless-stopped
     environment:
       SERVICES: s3
@@ -120,7 +120,7 @@ services:
       - localstack_data:/tmp/localstack
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - dexcian-backend-network
+      - dexian-backend-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
       interval: 30s
@@ -143,5 +143,5 @@ volumes:
     driver: local
 
 networks:
-  dexcian-backend-network:
+  dexian-backend-network:
     driver: bridge
