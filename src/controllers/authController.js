@@ -18,7 +18,14 @@ const register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password, name } = req.body;
+    const { email, password, name, firstName, lastName, phone } = req.body;
+    
+    // Generate name from firstName and lastName if name is not provided or empty
+    const fullName = name && name.trim() ? name.trim() : 
+                    (firstName && lastName) ? `${firstName.trim()} ${lastName.trim()}`.trim() :
+                    firstName ? firstName.trim() :
+                    lastName ? lastName.trim() :
+                    email; // fallback to email if no name provided
 
     // Check if user already exists in our database
     const existingUser = await User.findByEmail(email);
@@ -33,13 +40,25 @@ const register = async (req, res) => {
     if (response.status === 'OK') {
       try {
         // Create user in our database
-        const user = await User.createUser(response.user.id, email, name || email);
-        await user.save();
+        const user = await User.createUser(
+          response.user.id, 
+          email, 
+          fullName, 
+          firstName, 
+          lastName, 
+          phone
+        );
         
         // Send OTP email for verification
+        let otpData = null;
         try {
           const otpResult = await SuperTokensOTPService.sendOTP(email);
-          if (!otpResult.success) {
+          if (otpResult.success) {
+            otpData = {
+              deviceId: otpResult.deviceId,
+              preAuthSessionId: otpResult.preAuthSessionId
+            };
+          } else {
             console.error('Failed to send OTP during registration:', otpResult.error);
             // Don't fail registration if OTP fails, but log it
           }
@@ -49,9 +68,12 @@ const register = async (req, res) => {
         }
         
         // Store additional user metadata in SuperTokens
-        if (name) {
-          await UserMetadata.updateUserMetadata(response.user.id, { name });
-        }
+        const userMetadata = { name: fullName };
+        if (firstName) userMetadata.firstName = firstName;
+        if (lastName) userMetadata.lastName = lastName;
+        if (phone) userMetadata.phone = phone;
+        
+        await UserMetadata.updateUserMetadata(response.user.id, userMetadata);
         
         // User created successfully
         res.status(201).json({
@@ -59,9 +81,13 @@ const register = async (req, res) => {
           user: {
             id: response.user.id,
             email: response.user.email,
-            name: name || email,
+            name: fullName,
+            firstName: firstName || null,
+            lastName: lastName || null,
+            phone: phone || null,
             isEmailVerified: false
-          }
+          },
+          otpData: otpData // Include OTP data for frontend verification
         });
       } catch (dbError) {
         console.error('Database error during registration:', dbError);
@@ -164,6 +190,9 @@ const getProfile = async (req, res) => {
         id: user.supertokensUserId,
         email: user.email,
         name: userMetadata.metadata.name || user.name,
+        firstName: user.firstName || userMetadata.metadata.firstName || null,
+        lastName: user.lastName || userMetadata.metadata.lastName || null,
+        phone: user.phone || userMetadata.metadata.phone || null,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         status: user.status,
@@ -185,7 +214,7 @@ const updateProfile = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, preferences } = req.body;
+    const { name, firstName, lastName, phone, preferences } = req.body;
     const userId = req.session.getUserId();
     
     // Get user from our database
@@ -198,25 +227,43 @@ const updateProfile = async (req, res) => {
     if (name) {
       user.name = name;
     }
+    if (firstName !== undefined) {
+      user.firstName = firstName;
+    }
+    if (lastName !== undefined) {
+      user.lastName = lastName;
+    }
+    if (phone !== undefined) {
+      user.phone = phone;
+    }
     if (preferences) {
       user.preferences = { ...user.preferences, ...preferences };
     }
     await user.save();
 
     // Update user metadata in SuperTokens
-    if (name) {
-      await UserMetadata.updateUserMetadata(userId, { name });
+    const userMetadata = {};
+    if (name) userMetadata.name = name;
+    if (firstName !== undefined) userMetadata.firstName = firstName;
+    if (lastName !== undefined) userMetadata.lastName = lastName;
+    if (phone !== undefined) userMetadata.phone = phone;
+    
+    if (Object.keys(userMetadata).length > 0) {
+      await UserMetadata.updateUserMetadata(userId, userMetadata);
     }
 
     // Get updated user metadata
-    const userMetadata = await UserMetadata.getUserMetadata(userId);
+    const updatedUserMetadata = await UserMetadata.getUserMetadata(userId);
 
     res.json({
       message: 'Profile updated successfully',
       user: {
         id: user.supertokensUserId,
         email: user.email,
-        name: userMetadata.metadata.name || user.name,
+        name: updatedUserMetadata.metadata.name || user.name,
+        firstName: user.firstName || updatedUserMetadata.metadata.firstName || null,
+        lastName: user.lastName || updatedUserMetadata.metadata.lastName || null,
+        phone: user.phone || updatedUserMetadata.metadata.phone || null,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         preferences: user.preferences
@@ -269,14 +316,18 @@ const verifyOTP = async (req, res) => {
   try {
     const { email, otp, deviceId, preAuthSessionId } = req.body;
 
-    if (!email || !otp || !deviceId || !preAuthSessionId) {
+    if (!email || !otp) {
       return res.status(400).json({ 
-        error: 'Email, OTP, deviceId, and preAuthSessionId are required' 
+        error: 'Email and OTP are required' 
       });
     }
 
+    // Use provided deviceId and preAuthSessionId, or use fallback values
+    const finalDeviceId = deviceId || 'direct-verification';
+    const finalPreAuthSessionId = preAuthSessionId || 'direct-verification';
+
     // Use SuperTokens OTP service
-    const result = await SuperTokensOTPService.verifyOTP(email, otp, deviceId, preAuthSessionId);
+    const result = await SuperTokensOTPService.verifyOTP(email, otp, finalDeviceId, finalPreAuthSessionId);
 
     if (result.success) {
       // Send welcome email

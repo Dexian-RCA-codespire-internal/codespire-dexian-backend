@@ -19,6 +19,18 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  firstName: {
+    type: String,
+    trim: true
+  },
+  lastName: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
   role: {
     type: String,
     enum: ['user', 'admin', 'moderator'],
@@ -138,11 +150,14 @@ userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
   return this.findOne({ supertokensUserId });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name) {
+userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
   const user = new this({
     supertokensUserId,
     email: email.toLowerCase(),
-    name
+    name,
+    firstName,
+    lastName,
+    phone
   });
   
   return await user.save();

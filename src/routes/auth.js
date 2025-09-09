@@ -23,7 +23,10 @@ const router = express.Router();
 const registerValidation = [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
-  body('name').trim().isLength({ min: 2 })
+  body('name').optional().trim().isLength({ min: 2 }),
+  body('firstName').optional().trim().isLength({ min: 1 }),
+  body('lastName').optional().trim().isLength({ min: 1 }),
+  body('phone').optional().trim().isLength({ min: 10 })
 ];
 
 const loginValidation = [
@@ -32,7 +35,10 @@ const loginValidation = [
 ];
 
 const profileValidation = [
-  body('name').trim().isLength({ min: 2 })
+  body('name').optional().trim().isLength({ min: 2 }),
+  body('firstName').optional().trim().isLength({ min: 1 }),
+  body('lastName').optional().trim().isLength({ min: 1 }),
+  body('phone').optional().trim().isLength({ min: 10 })
 ];
 
 const otpValidation = [
