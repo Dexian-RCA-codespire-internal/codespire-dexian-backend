@@ -9,6 +9,10 @@ const {
   updateProfile,
   sendOTP,
   verifyOTP,
+  resendOTP,
+  sendMagicLink,
+  verifyMagicLink,
+  resendMagicLink,
   checkVerificationStatus,
   sendWelcomeEmail
 } = require('../controllers/authController');
@@ -37,7 +41,29 @@ const otpValidation = [
 
 const verifyOTPValidation = [
   body('email').isEmail().normalizeEmail(),
-  body('otp').isLength({ min: 6, max: 6 }).isNumeric()
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
+  body('deviceId').notEmpty(),
+  body('preAuthSessionId').notEmpty()
+];
+
+const resendOTPValidation = [
+  body('email').isEmail().normalizeEmail(),
+  body('deviceId').notEmpty(),
+  body('preAuthSessionId').notEmpty()
+];
+
+const magicLinkValidation = [
+  body('email').isEmail().normalizeEmail()
+];
+
+const verifyMagicLinkValidation = [
+  body('linkCode').notEmpty()
+];
+
+const resendMagicLinkValidation = [
+  body('email').isEmail().normalizeEmail(),
+  body('deviceId').notEmpty(),
+  body('preAuthSessionId').notEmpty()
 ];
 
 // Routes
@@ -50,6 +76,15 @@ router.put('/profile', authenticateToken, profileValidation, updateProfile);
 // OTP and Email routes
 router.post('/send-otp', otpValidation, sendOTP);
 router.post('/verify-otp', verifyOTPValidation, verifyOTP);
+router.post('/resend-otp', resendOTPValidation, resendOTP);
+
+// Magic Link routes
+router.post('/send-magic-link', magicLinkValidation, sendMagicLink);
+router.post('/verify-magic-link', verifyMagicLinkValidation, verifyMagicLink);
+router.get('/verify-magic-link/:token', verifyMagicLink); // GET route for direct magic link clicks
+router.post('/resend-magic-link', resendMagicLinkValidation, resendMagicLink);
+
+// General routes
 router.post('/check-verification', otpValidation, checkVerificationStatus);
 router.post('/send-welcome', authenticateToken, sendWelcomeEmail);
 
