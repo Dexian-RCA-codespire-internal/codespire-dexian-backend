@@ -33,7 +33,7 @@
     "nodemailer": "^7.0.6",
     "openai": "4.20.1",
     "socket.io": "4.7.4",
-    "supertokens-node": "16.0.0"
+    "supertokens-node": "^16.0.0"
   },
   "devDependencies": {
     "jest": "29.7.0",
