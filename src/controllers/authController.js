@@ -2,6 +2,8 @@ const { validationResult } = require('express-validator');
 const { createNewSession, getUserId, revokeAllSessionsForUser } = require('supertokens-node/recipe/session');
 const { signInUp, getUserById, signIn, signUp } = require('supertokens-node/recipe/emailpassword');
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
+const EmailVerification = require('supertokens-node/recipe/emailverification');
+const supertokens = require('supertokens-node');
 const config = require('../config');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
@@ -615,6 +617,162 @@ const sendWelcomeEmail = async (req, res) => {
   }
 };
 
+// Generate email verification token using SuperTokens
+const generateEmailVerificationToken = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const userId = req.session.getUserId();
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Create verification token using SuperTokens
+    const recipeUserId = new supertokens.RecipeUserId(userId);
+    const tokenRes = await EmailVerification.createEmailVerificationToken(
+      "public",
+      recipeUserId,
+      email
+    );
+
+    if (tokenRes.status === "OK") {
+      res.json({
+        success: true,
+        message: 'Email verification token generated successfully',
+        token: tokenRes.token
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Failed to generate verification token'
+      });
+    }
+  } catch (error) {
+    console.error('Generate email verification token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Verify email using SuperTokens token
+const verifyEmailToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Verify email using SuperTokens
+    const verifyRes = await EmailVerification.verifyEmailUsingToken("public", token);
+
+    if (verifyRes.status === "OK") {
+      // Update local database
+      const user = await User.findBySupertokensUserId(verifyRes.user.id);
+      if (user) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+        await user.save();
+      }
+
+      res.json({
+        success: true,
+        message: 'Email verified successfully',
+        user: {
+          id: verifyRes.user.id,
+          email: verifyRes.user.email,
+          isEmailVerified: true
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid or expired verification token'
+      });
+    }
+  } catch (error) {
+    console.error('Verify email token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Verify custom OTP with token
+const verifyCustomOTP = async (req, res) => {
+  try {
+    const { token, otp } = req.body;
+    const userId = req.session.getUserId();
+
+    if (!token || !otp) {
+      return res.status(400).json({ 
+        error: 'Token and OTP are required' 
+      });
+    }
+
+    // Get user from database
+    const user = await User.findBySupertokensUserId(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify the OTP using SuperTokensOTPService
+    const result = await SuperTokensOTPService.verifyOTP(
+      user.email, 
+      otp, 
+      'direct-verification', // deviceId
+      'direct-verification'  // preAuthSessionId
+    );
+
+    if (result.success) {
+      // Mark email as verified in SuperTokens and local DB
+      try {
+        // Flip the SuperTokens flag using manual verification
+        const recipeUserId = new supertokens.RecipeUserId(user.supertokensUserId);
+        const tokenRes = await EmailVerification.createEmailVerificationToken(
+          "public",
+          recipeUserId,
+          user.email
+        );
+        if (tokenRes.status === "OK") {
+          await EmailVerification.verifyEmailUsingToken("public", tokenRes.token);
+          console.log('✅ Email marked as verified in SuperTokens (custom OTP)');
+        }
+      } catch (e) {
+        console.error("Failed to mark verified in SuperTokens (custom OTP):", e);
+      }
+
+      // Update local database
+      user.isEmailVerified = true;
+      user.emailVerifiedAt = new Date();
+      await user.save();
+      console.log('✅ Email marked as verified in local DB (custom OTP)');
+
+      // Send welcome email
+      const welcomeEmailResult = await emailService.sendWelcomeEmail(user.email, user.name);
+      if (!welcomeEmailResult.success) {
+        console.error('Failed to send welcome email:', welcomeEmailResult.error);
+      }
+
+      res.json({
+        success: true,
+        message: 'OTP verified successfully! Email is now verified.',
+        user: {
+          id: user.supertokensUserId,
+          email: user.email,
+          name: user.name,
+          isEmailVerified: true
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'Invalid OTP'
+      });
+    }
+  } catch (error) {
+    console.error('Verify custom OTP error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -628,5 +786,8 @@ module.exports = {
   verifyMagicLink,
   resendMagicLink,
   checkVerificationStatus,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  generateEmailVerificationToken,
+  verifyEmailToken,
+  verifyCustomOTP
 };

@@ -2,6 +2,7 @@ const supertokens = require('supertokens-node');
 const EmailPassword = require('supertokens-node/recipe/emailpassword');
 const Session = require('supertokens-node/recipe/session');
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
+const EmailVerification = require('supertokens-node/recipe/emailverification');
 const config = require('./index');
 const emailService = require('../services/emailService');
 
@@ -19,13 +20,28 @@ const initSuperTokens = () => {
       websiteDomain: config.supertokens.appDomain,
     },
     recipeList: [
+      EmailVerification.init({
+        mode: 'OPTIONAL', // or 'REQUIRED' if you want to block APIs until verified
+      }),
       EmailPassword.init({
         signUpFeature: {
           formFields: [
             {
-              id: 'name',
-              label: 'Name',
-              placeholder: 'Enter your name',
+              id: 'firstName',
+              label: 'First Name',
+              placeholder: 'Enter your first name',
+              optional: true,
+            },
+            {
+              id: 'lastName',
+              label: 'Last Name',
+              placeholder: 'Enter your last name',
+              optional: true,
+            },
+            {
+              id: 'phone',
+              label: 'Phone Number',
+              placeholder: 'Enter your phone number',
               optional: true,
             },
           ],
@@ -72,6 +88,72 @@ const initSuperTokens = () => {
               },
             },
           },
+        },
+        override: {
+          apis: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              signUpPOST: async function (input) {
+                // Call the original signup
+                const response = await originalImplementation.signUpPOST(input);
+                
+                // If signup was successful, create user in our database
+                if (response.status === 'OK') {
+                  try {
+                    const User = require('../models/User');
+                    const SuperTokensOTPService = require('../services/supertokensOTPService');
+                    
+                    // Extract form fields from the request
+                    const formFields = input.formFields || [];
+                    const emailField = formFields.find(f => f.id === 'email');
+                    const firstNameField = formFields.find(f => f.id === 'firstName');
+                    const lastNameField = formFields.find(f => f.id === 'lastName');
+                    const phoneField = formFields.find(f => f.id === 'phone');
+                    
+                    const email = emailField?.value;
+                    const firstName = firstNameField?.value;
+                    const lastName = lastNameField?.value;
+                    const phone = phoneField?.value;
+                    
+                    // Generate full name
+                    const fullName = (firstName && lastName) ? `${firstName.trim()} ${lastName.trim()}`.trim() :
+                                    firstName ? firstName.trim() :
+                                    lastName ? lastName.trim() :
+                                    email;
+                    
+                    // Create user in our database
+                    await User.createUser(
+                      response.user.id,
+                      email,
+                      fullName,
+                      firstName,
+                      lastName,
+                      phone
+                    );
+                    
+                    // Send OTP email for verification
+                    try {
+                      const otpResult = await SuperTokensOTPService.sendOTP(email);
+                      if (otpResult.success) {
+                        console.log('✅ OTP sent during SuperTokens signup');
+                      } else {
+                        console.error('Failed to send OTP during SuperTokens signup:', otpResult.error);
+                      }
+                    } catch (otpError) {
+                      console.error('Error sending OTP during SuperTokens signup:', otpError);
+                    }
+                    
+                    console.log('✅ User created in database via SuperTokens signup');
+                  } catch (error) {
+                    console.error('❌ Error creating user in database via SuperTokens signup:', error);
+                    // Don't fail the signup if database creation fails
+                  }
+                }
+                
+                return response;
+              }
+            };
+          }
         },
       }),
       Session.init({

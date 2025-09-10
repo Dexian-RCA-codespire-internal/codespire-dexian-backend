@@ -10,7 +10,7 @@ class EmailService {
   initializeTransporter() {
     try {
         this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || 'smtp-mail.outlook.com',
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: parseInt(process.env.SMTP_PORT) || 587,
           secure: false, // Always false for port 587, use STARTTLS
           auth: process.env.SMTP_USER ? {
