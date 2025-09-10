@@ -10,7 +10,7 @@ class EmailService {
   initializeTransporter() {
     try {
         this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || 'smtp-mail.outlook.com',
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: parseInt(process.env.SMTP_PORT) || 587,
           secure: false, // Always false for port 587, use STARTTLS
           auth: process.env.SMTP_USER ? {
@@ -27,6 +27,12 @@ class EmailService {
         });
 
       console.log('📧 Email service initialized');
+      console.log('📧 SMTP Config:', {
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT) || 587,
+        user: process.env.SMTP_USER ? '***' : 'NOT SET',
+        hasPassword: !!process.env.SMTP_PASSWORD
+      });
     } catch (error) {
       console.error('❌ Failed to initialize email service:', error);
     }
@@ -65,7 +71,9 @@ class EmailService {
 
   async sendMagicLinkEmail(email, name, magicLink) {
     try {
+      console.log('📧 sendMagicLinkEmail called with:', { email, name, magicLink });
       if (!this.transporter) {
+        console.error('❌ Email transporter not initialized');
         throw new Error('Email transporter not initialized');
       }
 

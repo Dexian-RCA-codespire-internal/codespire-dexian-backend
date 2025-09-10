@@ -14,7 +14,10 @@ const {
   verifyMagicLink,
   resendMagicLink,
   checkVerificationStatus,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  generateEmailVerificationToken,
+  verifyEmailToken,
+  verifyCustomOTP
 } = require('../controllers/authController');
 
 const router = express.Router();
@@ -93,5 +96,12 @@ router.post('/resend-magic-link', resendMagicLinkValidation, resendMagicLink);
 // General routes
 router.post('/check-verification', otpValidation, checkVerificationStatus);
 router.post('/send-welcome', authenticateToken, sendWelcomeEmail);
+
+// SuperTokens Email Verification routes
+router.post('/generate-email-verification-token', authenticateToken, generateEmailVerificationToken);
+router.post('/verify-email-token', authenticateToken, verifyEmailToken);
+
+// Custom OTP verification with token
+router.post('/verify-custom-otp', authenticateToken, verifyCustomOTP);
 
 module.exports = router;
