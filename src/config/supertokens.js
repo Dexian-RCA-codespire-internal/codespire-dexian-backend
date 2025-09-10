@@ -8,6 +8,7 @@ const emailService = require('../services/emailService');
 
 // Initialize SuperTokens
 const initSuperTokens = () => {
+  console.log('🔧 Initializing SuperTokens...');
   supertokens.init({
     framework: 'express',
     supertokens: {
@@ -17,11 +18,128 @@ const initSuperTokens = () => {
     appInfo: {
       appName: config.supertokens.appName,
       apiDomain: config.supertokens.apiDomain,
-      websiteDomain: config.supertokens.appDomain,
+      websiteDomain: config.supertokens.apiDomain, // Use API domain for magic links
     },
     recipeList: [
       EmailVerification.init({
         mode: 'OPTIONAL', // or 'REQUIRED' if you want to block APIs until verified
+        emailDelivery: {
+          service: {
+            sendEmail: async (input) => {
+              try {
+                console.log('📧 SuperTokens email delivery called');
+                console.log('📧 Full input object keys:', Object.keys(input));
+                console.log('📧 Input details:', {
+                  email: input.email,
+                  hasUserInputCode: !!input.userInputCode,
+                  hasUrlWithLinkCode: !!input.urlWithLinkCode,
+                  userInputCode: input.userInputCode,
+                  urlWithLinkCode: input.urlWithLinkCode,
+                  type: input.type,
+                  user: input.user
+                });
+                const { email, userInputCode, urlWithLinkCode } = input;
+                
+                // Force magic link instead of OTP
+                if (urlWithLinkCode) {
+                  console.log('📧 Sending magic link email to:', email);
+                  console.log('📧 Magic link URL:', urlWithLinkCode);
+                  // Send magic link email
+                  const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
+                  
+                  if (!result.success) {
+                    console.error('❌ Magic link email failed:', result.error);
+                    throw new Error(`Failed to send magic link email: ${result.error}`);
+                  }
+                  
+                  console.log('✅ SuperTokens magic link email sent successfully');
+                } else if (userInputCode) {
+                  console.log('📧 OTP received but we want magic links. Generating magic link for:', email);
+                  // Generate a proper magic link using SuperTokens
+                  try {
+                    const EmailVerification = require('supertokens-node/recipe/emailverification');
+                    const supertokens = require('supertokens-node');
+                    
+                    // Get user ID from the input (if available)
+                    const userId = input.userId || input.user?.id;
+                    if (userId) {
+                      const recipeUserId = new supertokens.RecipeUserId(userId);
+                      const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, email);
+                      
+                      if (tokenRes.status === "OK") {
+                        const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
+                        console.log('📧 Generated proper magic link URL:', magicLinkUrl);
+                        
+                        const result = await emailService.sendMagicLinkEmail(email, email, magicLinkUrl);
+                        
+                        if (!result.success) {
+                          console.error('❌ Magic link email failed:', result.error);
+                          throw new Error(`Failed to send magic link email: ${result.error}`);
+                        }
+                        
+                        console.log('✅ SuperTokens magic link email sent successfully (generated from OTP)');
+                      } else {
+                        console.error('❌ Failed to create email verification token');
+                        throw new Error('Failed to create email verification token');
+                      }
+                    } else {
+                      console.error('❌ No user ID available to generate magic link');
+                      throw new Error('No user ID available to generate magic link');
+                    }
+                  } catch (error) {
+                    console.error('❌ Error generating magic link:', error);
+                    throw error;
+                  }
+                } else {
+                  console.log('⚠️ No userInputCode or urlWithLinkCode provided');
+                  console.log('📧 Attempting to extract email from user object or other fields');
+                  
+                  // Try to get email from user object or other fields
+                  const userEmail = input.user?.email || input.email || input.user?.id;
+                  if (userEmail) {
+                    console.log('📧 Found email in user object:', userEmail);
+                    // Generate a magic link for this user
+                    try {
+                      const EmailVerification = require('supertokens-node/recipe/emailverification');
+                      const supertokens = require('supertokens-node');
+                      
+                      const userId = input.user?.id;
+                      if (userId) {
+                        const recipeUserId = new supertokens.RecipeUserId(userId);
+                        const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, userEmail);
+                        
+                        if (tokenRes.status === "OK") {
+                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
+                          console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
+                          
+                          const result = await emailService.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
+                          
+                          if (!result.success) {
+                            console.error('❌ Magic link email failed:', result.error);
+                            throw new Error(`Failed to send magic link email: ${result.error}`);
+                          }
+                          
+                          console.log('✅ SuperTokens magic link email sent successfully (from user object)');
+                        } else {
+                          console.error('❌ Failed to create email verification token from user object');
+                        }
+                      } else {
+                        console.error('❌ No user ID found in user object');
+                      }
+                    } catch (error) {
+                      console.error('❌ Error generating magic link from user object:', error);
+                    }
+                  } else {
+                    console.error('❌ No email found in any field');
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Failed to send SuperTokens email:', error);
+                throw error;
+              }
+            },
+          },
+        },
       }),
       EmailPassword.init({
         signUpFeature: {
@@ -51,43 +169,6 @@ const initSuperTokens = () => {
         },
         resetPasswordUsingTokenFeature: {
           disableDefaultUI: false,
-        },
-        emailVerificationFeature: {
-          disableDefaultUI: false,
-          mode: 'OPTIONAL', // Make email verification optional, not required
-          emailDelivery: {
-            service: {
-              sendEmail: async (input) => {
-                try {
-                  const { email, userInputCode, urlWithLinkCode } = input;
-                  
-                  // Check if it's an OTP or magic link
-                  if (userInputCode) {
-                    // Send OTP email
-                    const result = await emailService.sendOTPEmail(email, email, userInputCode);
-                    
-                    if (!result.success) {
-                      throw new Error(`Failed to send OTP email: ${result.error}`);
-                    }
-                    
-                    console.log('✅ SuperTokens OTP email sent successfully');
-                  } else if (urlWithLinkCode) {
-                    // Send magic link email
-                    const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
-                    
-                    if (!result.success) {
-                      throw new Error(`Failed to send magic link email: ${result.error}`);
-                    }
-                    
-                    console.log('✅ SuperTokens magic link email sent successfully');
-                  }
-                } catch (error) {
-                  console.error('❌ Failed to send SuperTokens email:', error);
-                  throw error;
-                }
-              },
-            },
-          },
         },
         override: {
           apis: (originalImplementation) => {
@@ -164,6 +245,7 @@ const initSuperTokens = () => {
       UserMetadata.init(),
     ],
   });
+  console.log('✅ SuperTokens configuration completed');
 };
 
 module.exports = {
