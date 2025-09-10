@@ -19,6 +19,18 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  firstName: {
+    type: String,
+    trim: true
+  },
+  lastName: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
   role: {
     type: String,
     enum: ['user', 'admin', 'moderator'],
@@ -31,6 +43,18 @@ const userSchema = new mongoose.Schema({
   emailVerificationOTP: {
     code: String,
     expiresAt: Date
+  },
+  otp: {
+    type: String
+  },
+  otpExpiry: {
+    type: Date
+  },
+  magicLinkToken: {
+    type: String
+  },
+  magicLinkExpiry: {
+    type: Date
   },
   lastLoginAt: {
     type: Date
@@ -85,24 +109,36 @@ userSchema.methods.generateOTP = function() {
     expiresAt: expiresAt
   };
   
+  // Also set the otp field for SuperTokensOTPService compatibility
+  this.otp = otp;
+  this.otpExpiry = expiresAt;
+  
   return otp;
 };
 
 userSchema.methods.verifyOTP = function(otp) {
-  if (!this.emailVerificationOTP || !this.emailVerificationOTP.code) {
+  // Check both emailVerificationOTP and otp fields for compatibility
+  const otpCode = this.emailVerificationOTP?.code || this.otp;
+  const otpExpiry = this.emailVerificationOTP?.expiresAt || this.otpExpiry;
+  
+  if (!otpCode) {
     return false;
   }
   
-  if (new Date() > this.emailVerificationOTP.expiresAt) {
+  if (otpExpiry && new Date() > otpExpiry) {
     return false;
   }
   
-  return this.emailVerificationOTP.code === otp;
+  return otpCode === otp;
 };
 
 userSchema.methods.markEmailVerified = function() {
   this.isEmailVerified = true;
   this.emailVerificationOTP = undefined;
+  this.otp = undefined;
+  this.otpExpiry = undefined;
+  this.magicLinkToken = undefined;
+  this.magicLinkExpiry = undefined;
 };
 
 // Static methods
@@ -114,11 +150,14 @@ userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
   return this.findOne({ supertokensUserId });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name) {
+userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
   const user = new this({
     supertokensUserId,
     email: email.toLowerCase(),
-    name
+    name,
+    firstName,
+    lastName,
+    phone
   });
   
   return await user.save();
