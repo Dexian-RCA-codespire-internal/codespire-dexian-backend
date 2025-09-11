@@ -27,6 +27,7 @@ const apiClient = createApiClient();
 const fetchTickets = async (options = {}) => {
   try {
     console.log('📥 Fetching tickets from ServiceNow...');
+    console.log(`🔧 Max records limit: ${config.output.maxRecords}`);
     
     const {
       limit = 100,
@@ -100,58 +101,48 @@ const fetchTickets = async (options = {}) => {
 
     for (const ticketData of allTickets) {
       try {
-        // Check if ticket already exists
-        const existingTicket = await Ticket.findByTicketId(ticketData.number, 'ServiceNow');
-        
+        // Use upsert to either insert or update in one operation
+        const ticketDoc = {
+          ticket_id: ticketData.number,
+          source: 'ServiceNow',
+          short_description: ticketData.short_description,
+          description: ticketData.description,
+          category: ticketData.category,
+          subcategory: ticketData.subcategory,
+          status: ticketData.state,
+          priority: ticketData.priority,
+          impact: ticketData.impact,
+          urgency: ticketData.urgency,
+          opened_time: ticketData.opened_at ? new Date(ticketData.opened_at) : null,
+          closed_time: ticketData.closed_at ? new Date(ticketData.closed_at) : null,
+          resolved_time: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
+          requester: { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id },
+          assigned_to: { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to },
+          assignment_group: { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group },
+          company: { id: typeof ticketData.company === 'object' ? ticketData.company.value || ticketData.company.sys_id : ticketData.company },
+          location: { id: typeof ticketData.location === 'object' ? ticketData.location.value || ticketData.location.sys_id : ticketData.location },
+          tags: ticketData.tags ? ticketData.tags.split(',').map(tag => tag.trim()) : [],
+          raw: ticketData // Store original payload
+        };
+
+        // Check if ticket exists first
+        const existingTicket = await Ticket.findOne({ 
+          ticket_id: ticketData.number, 
+          source: 'ServiceNow' 
+        });
+
         if (!existingTicket) {
           // Create new ticket
-          const newTicket = new Ticket({
-            ticket_id: ticketData.number,
-            source: 'ServiceNow',
-            short_description: ticketData.short_description,
-            description: ticketData.description,
-            category: ticketData.category,
-            subcategory: ticketData.subcategory,
-            status: ticketData.state,
-            priority: ticketData.priority,
-            impact: ticketData.impact,
-            urgency: ticketData.urgency,
-            opened_time: ticketData.opened_at ? new Date(ticketData.opened_at) : null,
-            closed_time: ticketData.closed_at ? new Date(ticketData.closed_at) : null,
-            resolved_time: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
-            requester: { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id },
-            assigned_to: { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to },
-            assignment_group: { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group },
-            company: { id: typeof ticketData.company === 'object' ? ticketData.company.value || ticketData.company.sys_id : ticketData.company },
-            location: { id: typeof ticketData.location === 'object' ? ticketData.location.value || ticketData.location.sys_id : ticketData.location },
-            tags: ticketData.tags ? ticketData.tags.split(',').map(tag => tag.trim()) : [],
-            raw: ticketData // Store original payload
-          });
-          
+          const newTicket = new Ticket(ticketDoc);
           await newTicket.save();
           savedCount++;
         } else {
           // Update existing ticket
-          existingTicket.short_description = ticketData.short_description;
-          existingTicket.description = ticketData.description;
-          existingTicket.category = ticketData.category;
-          existingTicket.subcategory = ticketData.subcategory;
-          existingTicket.status = ticketData.state;
-          existingTicket.priority = ticketData.priority;
-          existingTicket.impact = ticketData.impact;
-          existingTicket.urgency = ticketData.urgency;
-          existingTicket.opened_time = ticketData.opened_at ? new Date(ticketData.opened_at) : null;
-          existingTicket.closed_time = ticketData.closed_at ? new Date(ticketData.closed_at) : null;
-          existingTicket.resolved_time = ticketData.resolved_at ? new Date(ticketData.resolved_at) : null;
-          existingTicket.requester = { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id };
-          existingTicket.assigned_to = { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to };
-          existingTicket.assignment_group = { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group };
-          existingTicket.company = { id: typeof ticketData.company === 'object' ? ticketData.company.value || ticketData.company.sys_id : ticketData.company };
-          existingTicket.location = { id: typeof ticketData.location === 'object' ? ticketData.location.value || ticketData.location.sys_id : ticketData.location };
-          existingTicket.tags = ticketData.tags ? ticketData.tags.split(',').map(tag => tag.trim()) : [];
-          existingTicket.raw = ticketData;
-          
-          await existingTicket.save();
+          await Ticket.findOneAndUpdate(
+            { ticket_id: ticketData.number, source: 'ServiceNow' },
+            ticketDoc,
+            { new: true }
+          );
           updatedCount++;
         }
       } catch (error) {

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const connectMongoDB = async () => {
   try {
     // Use MongoDB connection string from environment or default (no auth)
-    const mongoUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/testbg';
+    const mongoUrl = process.env.TICKET_DATABASE_URL ;
 
     await mongoose.connect(mongoUrl, {
       useNewUrlParser: true,
@@ -12,10 +12,9 @@ const connectMongoDB = async () => {
       socketTimeoutMS: 45000,
     });
     console.log('✅ MongoDB connection established successfully.');
-    console.log('MongoDB URL:', mongoUrl);
   } catch (error) {
     console.error('❌ Unable to connect to MongoDB:', error);
-    console.error('MongoDB URL:', process.env.DATABASE_URL || 'mongodb://localhost:27017/testbg');
+    console.error('MongoDB URL:', process.env.TICKETDATABASE_URL);
     // Don't exit process, just log the error
   }
 };

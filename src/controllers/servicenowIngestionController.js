@@ -20,7 +20,7 @@ const fetchTicketsHandler = async (req, res) => {
     if (result.success) {
       res.status(200).json({
         success: true,
-        message: 'Tickets fetched successfully',
+        message: `Tickets fetched successfully. Total: ${result.total} tickets`,
         data: result.data,
         total: result.total
       });

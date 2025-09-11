@@ -14,6 +14,10 @@ console.log('✅ SuperTokens initialized');
 const { connectMongoDB } = require('./config/database/mongodb');
 connectMongoDB();
 
+// Initialize ServiceNow Polling Service
+const { pollingService } = require('./services/servicenowPollingService');
+const config = require('./config');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -148,9 +152,21 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  
+  // Initialize ServiceNow polling service if enabled
+  if (config.servicenow.enablePolling) {
+    try {
+      await pollingService.initialize();
+      console.log('✅ ServiceNow polling service initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize ServiceNow polling service:', error);
+    }
+  } else {
+    console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+  }
 });
 
 module.exports = app;

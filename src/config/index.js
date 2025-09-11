@@ -50,13 +50,19 @@ const config = {
     username: process.env.SERVICENOW_USERNAME,
     password: process.env.SERVICENOW_PASSWORD,
     apiEndpoint: process.env.SERVICENOW_API_ENDPOINT || '/api/now/table/incident',
-    timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000
+    timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000,
+    // Polling configuration
+    pollingInterval: process.env.SERVICENOW_POLLING_INTERVAL || '*/1 * * * *', // Every minute
+    pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 100,
+    maxRetries: parseInt(process.env.SERVICENOW_MAX_RETRIES) || 3,
+    retryDelay: parseInt(process.env.SERVICENOW_RETRY_DELAY) || 5000,
+    enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false
   },
 
   // Output configuration
   output: {
     filename: process.env.OUTPUT_FILENAME || 'tickets.json',
-    maxRecords: parseInt(process.env.MAX_RECORDS) || 10
+    maxRecords: parseInt(process.env.MAX_RECORDS) || 50
   },
 
   // Query configuration for ServiceNow
