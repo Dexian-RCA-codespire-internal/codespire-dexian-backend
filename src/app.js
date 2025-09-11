@@ -16,6 +16,7 @@ connectMongoDB();
 
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
+const { bulkImportAllTickets } = require('./services/servicenowIngestionService');
 const config = require('./config');
 
 
@@ -156,11 +157,36 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
   
+  // Initialize ServiceNow bulk import if enabled
+  console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
+  if (config.servicenow.enableBulkImport) {
+    console.log('🔄 Bulk import triggered at app start');
+    try {
+      console.log('🔄 Starting ServiceNow bulk import...');
+      const result = await bulkImportAllTickets({
+        batchSize: config.servicenow.bulkImportBatchSize
+      });
+      
+      if (result.success) {
+        console.log(`✅ ServiceNow bulk import completed successfully:`);
+        console.log(`   - Total tickets imported: ${result.total}`);
+        console.log(`   - New tickets: ${result.database.saved}`);
+        console.log(`   - Updated tickets: ${result.database.updated}`);
+        console.log(`   - Errors: ${result.database.errors}`);
+      } else {
+        console.error('❌ ServiceNow bulk import failed:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to perform ServiceNow bulk import:', error);
+    }
+  } else {
+    console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
+  }
+  
   // Initialize ServiceNow polling service if enabled
   if (config.servicenow.enablePolling) {
     try {
       await pollingService.initialize();
-      console.log('✅ ServiceNow polling service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize ServiceNow polling service:', error);
     }

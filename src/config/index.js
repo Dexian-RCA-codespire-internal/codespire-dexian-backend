@@ -53,10 +53,13 @@ const config = {
     timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000,
     // Polling configuration
     pollingInterval: process.env.SERVICENOW_POLLING_INTERVAL || '*/1 * * * *', // Every minute
-    pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 100,
+    pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 10,
     maxRetries: parseInt(process.env.SERVICENOW_MAX_RETRIES) || 3,
     retryDelay: parseInt(process.env.SERVICENOW_RETRY_DELAY) || 5000,
-    enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false
+    enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
+    // Bulk import configuration
+    enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
+    bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
   },
 
   // Output configuration

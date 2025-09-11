@@ -1,6 +1,6 @@
 // new file servicenow
 const cron = require('node-cron');
-const { fetchTickets } = require('./servicenowIngestionService');
+const { fetchTicketsAndSave } = require('./servicenowIngestionService');
 const config = require('../config');
 const mongoose = require('mongoose');
 
@@ -139,8 +139,8 @@ class ServiceNowPollingService {
       
       console.log(`🔍 Polling for tickets since: ${lastSyncTime.toISOString()}`);
       
-      // Fetch tickets with the timestamp filter
-      const result = await fetchTickets({
+      // Fetch tickets with the timestamp filter and save to database
+      const result = await fetchTicketsAndSave({
         query: query,
         limit: config.servicenow.pollingBatchSize || 100
       });

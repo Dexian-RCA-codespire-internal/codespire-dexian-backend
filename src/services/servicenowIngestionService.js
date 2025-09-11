@@ -21,33 +21,43 @@ const createApiClient = () => {
 
 const apiClient = createApiClient();
 
+
 /**
- * Fetch all tickets from ServiceNow
+ * Fetch tickets from ServiceNow and save to database (for polling)
  */
-const fetchTickets = async (options = {}) => {
+const fetchTicketsAndSave = async (options = {}) => {
   try {
-    console.log('📥 Fetching tickets from ServiceNow...');
-    console.log(`🔧 Max records limit: ${config.output.maxRecords}`);
+    console.log('📥 Fetching tickets from ServiceNow for polling...');
     
     const {
-      limit = 100,
+      limit = 10,
+      offset = 0,
       query = '',
-      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags'
+      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+      useMaxRecords = false
     } = options;
 
-    let allTickets = [];
-    let offset = 0;
-    let hasMore = true;
+    // Determine the effective limit
+    const effectiveLimit = useMaxRecords ? 
+      Math.min(limit, config.output.maxRecords) : 
+      limit;
+    
+    console.log(`🔧 Requested limit: ${limit}, Effective limit: ${effectiveLimit}`);
 
-    while (hasMore && allTickets.length < config.output.maxRecords) {
-      const remainingRecords = config.output.maxRecords - allTickets.length;
+    let allTickets = [];
+    let currentOffset = offset;
+    let hasMore = true;
+    let totalFetched = 0;
+
+    while (hasMore && totalFetched < effectiveLimit) {
+      const remainingRecords = effectiveLimit - totalFetched;
       const currentLimit = Math.min(limit, remainingRecords);
       
-      console.log(`📄 Fetching records ${offset + 1} to ${offset + currentLimit}...`);
+      console.log(`📄 Fetching records ${currentOffset + 1} to ${currentOffset + currentLimit}...`);
       
       const params = {
         sysparm_limit: currentLimit,
-        sysparm_offset: offset,
+        sysparm_offset: currentOffset,
         sysparm_query: query,
         sysparm_fields: fields,
         sysparm_display_value: 'true'
@@ -58,12 +68,13 @@ const fetchTickets = async (options = {}) => {
       if (response.status === 200 && response.data.result) {
         const tickets = response.data.result;
         allTickets = allTickets.concat(tickets);
+        totalFetched += tickets.length;
         
         console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
         
         // Check if we have more records
-        hasMore = tickets.length === currentLimit && allTickets.length < config.output.maxRecords;
-        offset += currentLimit;
+        hasMore = tickets.length === currentLimit && totalFetched < effectiveLimit;
+        currentOffset += currentLimit;
         
         // Add a small delay to avoid overwhelming the API
         if (hasMore) {
@@ -79,22 +90,174 @@ const fetchTickets = async (options = {}) => {
     
     // Check if no data was returned
     if (allTickets.length === 0) {
-      console.log('⚠️ No tickets found in ServiceNow. This could mean:');
-      console.log('   - No tickets match the current query criteria');
-      console.log('   - ServiceNow instance has no incident data');
-      console.log('   - API credentials or permissions issue');
-      console.log('   - ServiceNow API endpoint is incorrect');
-      
+      console.log('⚠️ No tickets found in ServiceNow for polling');
       return {
         success: true,
         message: 'No tickets found',
         data: [],
-        total: 0
+        total: 0,
+        database: {
+          saved: 0,
+          updated: 0,
+          errors: 0
+        }
       };
     }
 
     // Save tickets to database
     console.log('💾 Saving tickets to database...');
+    let savedCount = 0;
+    let updatedCount = 0;
+    let errorCount = 0;
+
+    for (const ticketData of allTickets) {
+      try {
+        const ticketDoc = {
+          ticket_id: ticketData.number,
+          source: 'ServiceNow',
+          short_description: ticketData.short_description,
+          description: ticketData.description,
+          category: ticketData.category,
+          subcategory: ticketData.subcategory,
+          status: ticketData.state,
+          priority: ticketData.priority,
+          impact: ticketData.impact,
+          urgency: ticketData.urgency,
+          opened_time: ticketData.opened_at ? new Date(ticketData.opened_at) : null,
+          closed_time: ticketData.closed_at ? new Date(ticketData.closed_at) : null,
+          resolved_time: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
+          requester: { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id },
+          assigned_to: { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to },
+          assignment_group: { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group },
+          company: { id: typeof ticketData.company === 'object' ? ticketData.company.value || ticketData.company.sys_id : ticketData.company },
+          location: { id: typeof ticketData.location === 'object' ? ticketData.location.value || ticketData.location.sys_id : ticketData.location },
+          tags: ticketData.tags ? ticketData.tags.split(',').map(tag => tag.trim()) : [],
+          raw: ticketData
+        };
+
+        // Check if ticket exists first
+        const existingTicket = await Ticket.findOne({ 
+          ticket_id: ticketData.number, 
+          source: 'ServiceNow' 
+        });
+
+        if (!existingTicket) {
+          // Create new ticket
+          const newTicket = new Ticket(ticketDoc);
+          await newTicket.save();
+          savedCount++;
+        } else {
+          // Update existing ticket
+          await Ticket.findOneAndUpdate(
+            { ticket_id: ticketData.number, source: 'ServiceNow' },
+            ticketDoc,
+            { new: true }
+          );
+          updatedCount++;
+        }
+      } catch (error) {
+        console.error(`❌ Error saving ticket ${ticketData.number}:`, error.message);
+        errorCount++;
+      }
+    }
+
+    console.log(`✅ Database operations completed:`);
+    console.log(`   - New tickets saved: ${savedCount}`);
+    console.log(`   - Existing tickets updated: ${updatedCount}`);
+    console.log(`   - Errors: ${errorCount}`);
+    
+    return {
+      success: true,
+      message: 'Tickets fetched and saved successfully',
+      data: allTickets,
+      total: allTickets.length,
+      pagination: {
+        limit: effectiveLimit,
+        offset: offset,
+        hasMore: hasMore,
+        nextOffset: hasMore ? currentOffset : null
+      },
+      database: {
+        saved: savedCount,
+        updated: updatedCount,
+        errors: errorCount
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error fetching tickets:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    return {
+      success: false,
+      error: error.message,
+      data: []
+    };
+  }
+};
+
+/**
+ * Bulk import all tickets from ServiceNow (for initial setup)
+ * This function bypasses pagination limits and fetches ALL tickets
+ */
+const bulkImportAllTickets = async (options = {}) => {
+  try {
+    console.log('🚀 Starting bulk import of ALL tickets from ServiceNow...');
+    
+    const {
+      query = '',
+      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+      batchSize = 1000 // Large batch size for bulk import
+    } = options;
+
+    let allTickets = [];
+    let offset = 0;
+    let hasMore = true;
+    let totalFetched = 0;
+
+    console.log(`🔧 Bulk import settings:`);
+    console.log(`   - Batch size: ${batchSize}`);
+    console.log(`   - Query filter: ${query || 'None (all tickets)'}`);
+
+    while (hasMore) {
+      console.log(`📄 Fetching batch ${Math.floor(offset / batchSize) + 1} (records ${offset + 1} to ${offset + batchSize})...`);
+      
+      const params = {
+        sysparm_limit: batchSize,
+        sysparm_offset: offset,
+        sysparm_query: query,
+        sysparm_fields: fields,
+        sysparm_display_value: 'true'
+      };
+
+      const response = await apiClient.get(config.servicenow.apiEndpoint, { params });
+
+      if (response.status === 200 && response.data.result) {
+        const tickets = response.data.result;
+        allTickets = allTickets.concat(tickets);
+        totalFetched += tickets.length;
+        
+        console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
+        
+        // Check if we have more records
+        hasMore = tickets.length === batchSize;
+        offset += batchSize;
+        
+        // Add a small delay to avoid overwhelming the API
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } else {
+        console.log('⚠️ No more tickets found or API returned unexpected response');
+        hasMore = false;
+      }
+    }
+
+    console.log(`📊 Bulk import completed: ${allTickets.length} tickets fetched from ServiceNow`);
+
+    // Save all tickets to database
+    console.log('💾 Saving all tickets to database...');
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
@@ -151,14 +314,14 @@ const fetchTickets = async (options = {}) => {
       }
     }
 
-    console.log(`✅ Database operations completed:`);
+    console.log(`✅ Bulk import database operations completed:`);
     console.log(`   - New tickets saved: ${savedCount}`);
     console.log(`   - Existing tickets updated: ${updatedCount}`);
     console.log(`   - Errors: ${errorCount}`);
     
     return {
       success: true,
-      message: 'Tickets fetched and saved successfully',
+      message: 'Bulk import completed successfully',
       data: allTickets,
       total: allTickets.length,
       database: {
@@ -168,7 +331,7 @@ const fetchTickets = async (options = {}) => {
       }
     };
   } catch (error) {
-    console.error('❌ Error fetching tickets:', error.message);
+    console.error('❌ Error during bulk import:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', error.response.data);
@@ -182,5 +345,6 @@ const fetchTickets = async (options = {}) => {
 };
 
 module.exports = {
-  fetchTickets
+  fetchTicketsAndSave,
+  bulkImportAllTickets
 };
