@@ -42,6 +42,29 @@ const config = {
       region: process.env.AWS_DEFAULT_REGION || 'us-east-1',
       bucket: process.env.S3_BUCKET || 'test-bg-s3-bucket'
     }
+  },
+
+  // ServiceNow configuration
+  servicenow: {
+    url: process.env.SERVICENOW_URL,
+    username: process.env.SERVICENOW_USERNAME,
+    password: process.env.SERVICENOW_PASSWORD,
+    apiEndpoint: process.env.SERVICENOW_API_ENDPOINT || '/api/now/table/incident',
+    timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000
+  },
+
+  // Output configuration
+  output: {
+    filename: process.env.OUTPUT_FILENAME || 'tickets.json',
+    maxRecords: parseInt(process.env.MAX_RECORDS) || 10
+  },
+
+  // Query configuration for ServiceNow
+  query: {
+    sysparm_limit: parseInt(process.env.SERVICENOW_QUERY_LIMIT) || 100,
+    sysparm_query: process.env.SERVICENOW_QUERY || '',
+    sysparm_fields: process.env.SERVICENOW_FIELDS || 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+    sysparm_display_value: 'true'
   }
 };
 
