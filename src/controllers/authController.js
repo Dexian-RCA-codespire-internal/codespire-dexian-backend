@@ -7,7 +7,6 @@ const supertokens = require('supertokens-node');
 const config = require('../config');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
-const novuService = require('../services/novuService');
 const SuperTokensOTPService = require('../services/supertokensOTPService');
 
 // Note: SuperTokens handles user management automatically
@@ -504,7 +503,7 @@ const verifyMagicLink = async (req, res) => {
             <div class="container">
               <h1 class="success">✅ Email Verified Successfully!</h1>
               <p>Your email has been verified. You can now log in to your account.</p>
-              <p><a href="http://localhost:5500/test-auth.html">Go to Login Page</a></p>
+              <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/test-auth.html">Go to Login Page</a></p>
             </div>
           </body>
           </html>
@@ -536,7 +535,7 @@ const verifyMagicLink = async (req, res) => {
             <div class="container">
               <h1 class="error">❌ Verification Failed</h1>
               <p>${result.error}</p>
-              <p><a href="http://localhost:5500/test-auth.html">Go to Login Page</a></p>
+              <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/test-auth.html">Go to Login Page</a></p>
             </div>
           </body>
           </html>
@@ -598,19 +597,11 @@ const sendWelcomeEmail = async (req, res) => {
       return res.status(400).json({ error: 'Email and name are required' });
     }
 
-    const result = await novuService.sendWelcomeEmail(email, name);
-
-    if (result.success) {
-      res.json({
-        success: true,
-        message: 'Welcome email sent successfully'
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send welcome email'
-      });
-    }
+    // Welcome email functionality removed (Novu service removed)
+    res.json({
+      success: true,
+      message: 'Welcome email functionality has been removed'
+    });
   } catch (error) {
     console.error('Send welcome email error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -773,6 +764,177 @@ const verifyCustomOTP = async (req, res) => {
   }
 };
 
+// Forgot Password - Generate SuperTokens reset token and send email
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Email is required' 
+      });
+    }
+
+    // Check if user exists
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'User not found with this email address' 
+      });
+    }
+
+    console.log('User found:', {
+      email: user.email,
+      supertokensUserId: user.supertokensUserId,
+      userIdType: typeof user.supertokensUserId
+    });
+
+    // Generate a custom reset token and store it in the user document
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    
+    // Store the reset token in the user document
+    user.passwordResetToken = {
+      token: resetToken,
+      expiresAt: expiresAt
+    };
+    await user.save();
+    
+    // Create reset link
+    const resetLink = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/reset-password?token=${resetToken}`;
+    
+    // Send reset email with the link using our custom email service
+    const emailResult = await emailService.sendPasswordResetEmail(
+      user.email, 
+      user.name || 'User', 
+      resetLink
+    );
+    
+    if (emailResult.success) {
+      res.json({
+        success: true,
+        message: 'Password reset link sent successfully. Please check your email.',
+        email: user.email
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send reset email',
+        details: emailResult.error
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+// Reset Password using custom token
+const resetPasswordWithToken = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ 
+        error: 'Token and new password are required' 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    // Find user by reset token
+    const user = await User.findOne({ 
+      'passwordResetToken.token': token,
+      'passwordResetToken.expiresAt': { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token. Please request a new password reset.'
+      });
+    }
+
+    // Reset password using SuperTokens v19 API
+    const supertokens = require('supertokens-node');
+    const EmailPassword = require('supertokens-node/recipe/emailpassword').default;
+    
+    try {
+      console.log('Attempting to reset password for user:', user.supertokensUserId);
+      
+      // Get the user from SuperTokens to find the email-password recipe user id
+      const u = await supertokens.getUser(user.supertokensUserId);
+      if (!u) {
+        return res.status(400).json({
+          success: false,
+          error: 'User not found in SuperTokens'
+        });
+      }
+      
+      // Find the email-password login method for the 'public' tenant
+      const epLogin = u.loginMethods.find(
+        (lm) => lm.recipeId === 'emailpassword' && lm.tenantIds.includes('public')
+      );
+      
+      if (!epLogin) {
+        return res.status(400).json({
+          success: false,
+          error: 'User has no email/password login for tenant \'public\''
+        });
+      }
+      
+      console.log('Found EP login method:', {
+        recipeId: epLogin.recipeId,
+        tenantIds: epLogin.tenantIds,
+        recipeUserId: epLogin.recipeUserId.getAsString()
+      });
+      
+      // Update password using the correct recipeUserId
+      const updateResult = await EmailPassword.updateEmailOrPassword({
+        recipeUserId: epLogin.recipeUserId,
+        password: newPassword,
+        tenantIdForPasswordPolicy: 'public'
+      });
+      
+      console.log('Password update result:', updateResult);
+      
+      if (updateResult.status === 'OK') {
+        // Clear the reset token after successful password reset
+        user.passwordResetToken = undefined;
+        await user.save();
+        
+        res.json({
+          success: true,
+          message: 'Password reset successfully. You can now log in with your new password.'
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to update password',
+          details: updateResult.status
+        });
+      }
+    } catch (updateError) {
+      console.error('Password update error:', updateError);
+      res.status(400).json({
+        success: false,
+        error: 'Failed to update password',
+        details: updateError.message
+      });
+    }
+  } catch (error) {
+    console.error('Reset password with token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
 module.exports = {
   register,
   login,
@@ -789,5 +951,9 @@ module.exports = {
   sendWelcomeEmail,
   generateEmailVerificationToken,
   verifyEmailToken,
-  verifyCustomOTP
+  verifyCustomOTP,
+  forgotPassword,
+  resetPasswordWithToken
 };
+
+
