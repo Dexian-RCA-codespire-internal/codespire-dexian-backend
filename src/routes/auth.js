@@ -17,7 +17,9 @@ const {
   sendWelcomeEmail,
   generateEmailVerificationToken,
   verifyEmailToken,
-  verifyCustomOTP
+  verifyCustomOTP,
+  forgotPassword,
+  resetPasswordWithToken
 } = require('../controllers/authController');
 
 const router = express.Router();
@@ -43,6 +45,16 @@ const profileValidation = [
   body('lastName').optional().trim().isLength({ min: 1 }),
   body('phone').optional().trim().isLength({ min: 10 })
 ];
+
+const forgotPasswordValidation = [
+  body('email').isEmail().normalizeEmail()
+];
+
+const resetPasswordValidation = [
+  body('token').notEmpty(),
+  body('newPassword').isLength({ min: 6 })
+];
+
 
 const otpValidation = [
   body('email').isEmail().normalizeEmail()
@@ -92,6 +104,10 @@ router.post('/send-magic-link', magicLinkValidation, sendMagicLink);
 router.post('/verify-magic-link', verifyMagicLinkValidation, verifyMagicLink);
 router.get('/verify-magic-link/:token', verifyMagicLink); // GET route for direct magic link clicks
 router.post('/resend-magic-link', resendMagicLinkValidation, resendMagicLink);
+
+// Password Reset routes (SuperTokens-based)
+router.post('/forgot-password', forgotPasswordValidation, forgotPassword);
+router.post('/reset-password', resetPasswordValidation, resetPasswordWithToken);
 
 // General routes
 router.post('/check-verification', otpValidation, checkVerificationStatus);

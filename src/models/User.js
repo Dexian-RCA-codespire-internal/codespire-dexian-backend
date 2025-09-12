@@ -44,6 +44,14 @@ const userSchema = new mongoose.Schema({
     code: String,
     expiresAt: Date
   },
+  passwordResetOTP: {
+    code: String,
+    expiresAt: Date
+  },
+  passwordResetToken: {
+    token: String,
+    expiresAt: Date
+  },
   otp: {
     type: String
   },
@@ -102,7 +110,8 @@ userSchema.methods.toJSON = function() {
 
 userSchema.methods.generateOTP = function() {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + (process.env.OTP_EXPIRY_MINUTES || 10) * 60 * 1000);
+  const config = require('../config');
+  const expiresAt = new Date(Date.now() + config.otp.expiryMinutes * 60 * 1000);
   
   this.emailVerificationOTP = {
     code: otp,

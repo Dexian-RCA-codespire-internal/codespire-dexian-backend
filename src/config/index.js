@@ -21,48 +21,92 @@ const config = {
     apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:3000'
   },
 
-  // Novu configuration
-  novu: {
-    apiKey: process.env.NOVU_API_KEY,
-    appIdentifier: process.env.NOVU_APP_IDENTIFIER || 'test-bg-app',
-    backendUrl: process.env.NOVU_BACKEND_URL || 'https://api.novu.co'
-  },
   
   // CORS configuration
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: true
+    origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : (process.env.CORS_ORIGIN || '*'),
+    credentials: process.env.CORS_CREDENTIALS === 'true' || true
   },
 
   // Storage configuration
   storage: {
+    type: process.env.STORAGE_TYPE || 'aws-s3',
     aws: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
       region: process.env.AWS_DEFAULT_REGION || 'us-east-1',
       bucket: process.env.S3_BUCKET || 'test-bg-s3-bucket'
+    },
+    minio: {
+      accessKey: process.env.MINIO_ROOT_USER || 'minioadmin',
+      secretKey: process.env.MINIO_ROOT_PASSWORD || 'minioadmin123',
+      bucket: process.env.MINIO_BUCKET || 'test-bg-bucket'
+    },
+    azure: {
+      containerName: process.env.AZURE_CONTAINER_NAME || 'test-bg-container'
     }
   },
 
-  // ServiceNow configuration
-  servicenow: {
-    url: process.env.SERVICENOW_URL,
-    username: process.env.SERVICENOW_USERNAME,
-    password: process.env.SERVICENOW_PASSWORD,
-    apiEndpoint: process.env.SERVICENOW_API_ENDPOINT || '/api/now/table/incident',
-    timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000,
-    // Polling configuration
-    pollingInterval: process.env.SERVICENOW_POLLING_INTERVAL || '*/1 * * * *', // Every minute
-    pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 10,
-    maxRetries: parseInt(process.env.SERVICENOW_MAX_RETRIES) || 3,
-    retryDelay: parseInt(process.env.SERVICENOW_RETRY_DELAY) || 5000,
-    enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
-    // Bulk import configuration
-    enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
-    bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+  // Email configuration
+  email: {
+    smtp: {
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true' || false,
+      user: process.env.SMTP_USER,
+      password: process.env.SMTP_PASSWORD,
+      fromName: process.env.SMTP_FROM_NAME || 'Test BG App',
+      fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@test-bg.com'
+    }
   },
 
-  // Output configuration
+  // OTP configuration
+  otp: {
+    expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES) || 10,
+    length: parseInt(process.env.OTP_LENGTH) || 6
+  },
+
+  // Session configuration
+  session: {
+    secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this-in-production'
+  },
+
+  // Rate limiting configuration
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+  },
+
+  // Logging configuration
+  logging: {
+    level: process.env.LOG_LEVEL || 'info',
+    file: process.env.LOG_FILE || './logs/app.log'
+  },
+
+  // Security configuration
+  security: {
+    bcryptSaltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10
+  },
+
+    // ServiceNow configuration
+    servicenow: {
+      url: process.env.SERVICENOW_URL,
+      username: process.env.SERVICENOW_USERNAME,
+      password: process.env.SERVICENOW_PASSWORD,
+      apiEndpoint: process.env.SERVICENOW_API_ENDPOINT || '/api/now/table/incident',
+      timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000,
+      // Polling configuration
+      pollingInterval: process.env.SERVICENOW_POLLING_INTERVAL || '*/1 * * * *', // Every minute
+      pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 10,
+      maxRetries: parseInt(process.env.SERVICENOW_MAX_RETRIES) || 3,
+      retryDelay: parseInt(process.env.SERVICENOW_RETRY_DELAY) || 5000,
+      enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
+      // Bulk import configuration
+      enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
+      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+    },
+
+      // Output configuration
   output: {
     filename: process.env.OUTPUT_FILENAME || 'tickets.json',
     maxRecords: parseInt(process.env.MAX_RECORDS) || 50
