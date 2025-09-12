@@ -16,7 +16,7 @@ connectMongoDB();
 
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
-const { bulkImportAllTickets } = require('./services/servicenowIngestionService');
+const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const config = require('./config');
 
 
@@ -157,24 +157,34 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
   
-  // Initialize ServiceNow bulk import if enabled
+  // Initialize ServiceNow bulk import if enabled and not already completed
   console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
   if (config.servicenow.enableBulkImport) {
-    console.log('🔄 Bulk import triggered at app start');
     try {
-      console.log('🔄 Starting ServiceNow bulk import...');
-      const result = await bulkImportAllTickets({
-        batchSize: config.servicenow.bulkImportBatchSize
-      });
+      // Check if bulk import has already been completed
+      const alreadyCompleted = await hasCompletedBulkImport();
       
-      if (result.success) {
-        console.log(`✅ ServiceNow bulk import completed successfully:`);
-        console.log(`   - Total tickets imported: ${result.total}`);
-        console.log(`   - New tickets: ${result.database.saved}`);
-        console.log(`   - Updated tickets: ${result.database.updated}`);
-        console.log(`   - Errors: ${result.database.errors}`);
+      if (alreadyCompleted) {
+        const status = await getBulkImportStatus();
+        console.log('ℹ️ Bulk import already completed. Skipping startup import.');
+        console.log(`   - Last import: ${status.lastImportTime}`);
+        console.log(`   - Total imported: ${status.totalImported}`);
+        console.log('   - Use manual endpoint to force re-import if needed');
       } else {
-        console.error('❌ ServiceNow bulk import failed:', result.error);
+        console.log('🔄 Starting ServiceNow bulk import (first time setup)...');
+        const result = await bulkImportAllTickets({
+          batchSize: config.servicenow.bulkImportBatchSize
+        });
+        
+        if (result.success) {
+          console.log(`✅ ServiceNow bulk import completed successfully:`);
+          console.log(`   - Total tickets imported: ${result.total}`);
+          console.log(`   - New tickets: ${result.database.saved}`);
+          console.log(`   - Updated tickets: ${result.database.updated}`);
+          console.log(`   - Errors: ${result.database.errors}`);
+        } else {
+          console.error('❌ ServiceNow bulk import failed:', result.error);
+        }
       }
     } catch (error) {
       console.error('❌ Failed to perform ServiceNow bulk import:', error);

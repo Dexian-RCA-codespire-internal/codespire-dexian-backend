@@ -14,7 +14,7 @@ const connectMongoDB = async () => {
     console.log('✅ MongoDB connection established successfully.');
   } catch (error) {
     console.error('❌ Unable to connect to MongoDB:', error);
-    console.error('MongoDB URL:', process.env.TICKETDATABASE_URL);
+    console.error('MongoDB URL:', process.env.TICKET_DATABASE_URL);
     // Don't exit process, just log the error
   }
 };

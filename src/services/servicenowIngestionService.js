@@ -2,6 +2,95 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const mongoose = require('mongoose');
+
+// Bulk Import State Schema
+const bulkImportStateSchema = new mongoose.Schema({
+  service: { type: String, default: 'servicenow', unique: true },
+  hasCompletedInitialImport: { type: Boolean, default: false },
+  lastBulkImportTime: { type: Date, default: null },
+  totalTicketsImported: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const BulkImportState = mongoose.model('BulkImportState', bulkImportStateSchema);
+
+/**
+ * Check if bulk import has already been completed
+ */
+const hasCompletedBulkImport = async () => {
+  try {
+    const state = await BulkImportState.findOne({ service: 'servicenow' });
+    return state ? state.hasCompletedInitialImport : false;
+  } catch (error) {
+    console.error('❌ Error checking bulk import state:', error.message);
+    return false;
+  }
+};
+
+/**
+ * Mark bulk import as completed
+ */
+const markBulkImportCompleted = async (totalTicketsImported) => {
+  try {
+    await BulkImportState.findOneAndUpdate(
+      { service: 'servicenow' },
+      {
+        hasCompletedInitialImport: true,
+        lastBulkImportTime: new Date(),
+        totalTicketsImported: totalTicketsImported,
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    console.log('✅ Bulk import state marked as completed');
+  } catch (error) {
+    console.error('❌ Error marking bulk import as completed:', error.message);
+  }
+};
+
+/**
+ * Reset bulk import state (for manual re-import)
+ */
+const resetBulkImportState = async () => {
+  try {
+    await BulkImportState.findOneAndUpdate(
+      { service: 'servicenow' },
+      {
+        hasCompletedInitialImport: false,
+        lastBulkImportTime: null,
+        totalTicketsImported: 0,
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    console.log('🔄 Bulk import state reset');
+  } catch (error) {
+    console.error('❌ Error resetting bulk import state:', error.message);
+  }
+};
+
+/**
+ * Get bulk import status
+ */
+const getBulkImportStatus = async () => {
+  try {
+    const state = await BulkImportState.findOne({ service: 'servicenow' });
+    return {
+      hasCompleted: state ? state.hasCompletedInitialImport : false,
+      lastImportTime: state ? state.lastBulkImportTime : null,
+      totalImported: state ? state.totalTicketsImported : 0
+    };
+  } catch (error) {
+    console.error('❌ Error getting bulk import status:', error.message);
+    return {
+      hasCompleted: false,
+      lastImportTime: null,
+      totalImported: 0
+    };
+  }
+};
 
 // Create axios instance with basic auth
 const createApiClient = () => {
@@ -200,9 +289,23 @@ const fetchTicketsAndSave = async (options = {}) => {
 /**
  * Bulk import all tickets from ServiceNow (for initial setup)
  * This function bypasses pagination limits and fetches ALL tickets
+ * Includes guardrails to prevent unnecessary re-imports
  */
 const bulkImportAllTickets = async (options = {}) => {
   try {
+    // Check if bulk import has already been completed
+    const alreadyCompleted = await hasCompletedBulkImport();
+    if (alreadyCompleted && !options.force) {
+      console.log('ℹ️ Bulk import already completed. Use force=true to re-import.');
+      const status = await getBulkImportStatus();
+      return {
+        success: true,
+        message: 'Bulk import already completed',
+        skipped: true,
+        status: status
+      };
+    }
+
     console.log('🚀 Starting bulk import of ALL tickets from ServiceNow...');
     
     const {
@@ -319,6 +422,9 @@ const bulkImportAllTickets = async (options = {}) => {
     console.log(`   - Existing tickets updated: ${updatedCount}`);
     console.log(`   - Errors: ${errorCount}`);
     
+    // Mark bulk import as completed
+    await markBulkImportCompleted(allTickets.length);
+    
     return {
       success: true,
       message: 'Bulk import completed successfully',
@@ -346,5 +452,9 @@ const bulkImportAllTickets = async (options = {}) => {
 
 module.exports = {
   fetchTicketsAndSave,
-  bulkImportAllTickets
+  bulkImportAllTickets,
+  hasCompletedBulkImport,
+  markBulkImportCompleted,
+  resetBulkImportState,
+  getBulkImportStatus
 };
