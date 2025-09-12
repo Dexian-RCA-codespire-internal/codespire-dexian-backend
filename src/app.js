@@ -10,9 +10,11 @@ initSuperTokens();
 
 console.log('✅ SuperTokens initialized');
 
-// Initialize MongoDB
-const { connectMongoDB } = require('./config/database/mongodb');
-connectMongoDB();
+// Initialize all databases (MongoDB and Qdrant)
+const { initializeDatabase } = require('./config/database');
+initializeDatabase().catch(error => {
+  console.error('Failed to initialize databases:', error);
+});
 
 
 const app = express();
