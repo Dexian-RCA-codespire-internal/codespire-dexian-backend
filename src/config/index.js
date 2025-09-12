@@ -86,6 +86,38 @@ const config = {
   // Security configuration
   security: {
     bcryptSaltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10
+  },
+
+    // ServiceNow configuration
+    servicenow: {
+      url: process.env.SERVICENOW_URL,
+      username: process.env.SERVICENOW_USERNAME,
+      password: process.env.SERVICENOW_PASSWORD,
+      apiEndpoint: process.env.SERVICENOW_API_ENDPOINT || '/api/now/table/incident',
+      timeout: parseInt(process.env.SERVICENOW_TIMEOUT) || 30000,
+      // Polling configuration
+      pollingInterval: process.env.SERVICENOW_POLLING_INTERVAL || '*/1 * * * *', // Every minute
+      pollingBatchSize: parseInt(process.env.SERVICENOW_POLLING_BATCH_SIZE) || 10,
+      maxRetries: parseInt(process.env.SERVICENOW_MAX_RETRIES) || 3,
+      retryDelay: parseInt(process.env.SERVICENOW_RETRY_DELAY) || 5000,
+      enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
+      // Bulk import configuration
+      enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
+      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+    },
+
+      // Output configuration
+  output: {
+    filename: process.env.OUTPUT_FILENAME || 'tickets.json',
+    maxRecords: parseInt(process.env.MAX_RECORDS) || 50
+  },
+
+  // Query configuration for ServiceNow
+  query: {
+    sysparm_limit: parseInt(process.env.SERVICENOW_QUERY_LIMIT) || 100,
+    sysparm_query: process.env.SERVICENOW_QUERY || '',
+    sysparm_fields: process.env.SERVICENOW_FIELDS || 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+    sysparm_display_value: 'true'
   }
 };
 

@@ -2,10 +2,9 @@ const mongoose = require('mongoose');
 
 const connectMongoDB = async () => {
   try {
-    // Use MongoDB connection string from environment or default
-    const mongoUrl = process.env.MONGO_URL || 
-      `mongodb://${process.env.MONGO_ROOT_USERNAME || 'admin'}:${process.env.MONGO_ROOT_PASSWORD || 'password123'}@localhost:27017/${process.env.MONGO_DATABASE || 'testbg'}?authSource=admin`;
-    
+    // Use MongoDB connection string from environment or default (no auth)
+    const mongoUrl = process.env.TICKET_DATABASE_URL ;
+
     await mongoose.connect(mongoUrl, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -15,7 +14,7 @@ const connectMongoDB = async () => {
     console.log('✅ MongoDB connection established successfully.');
   } catch (error) {
     console.error('❌ Unable to connect to MongoDB:', error);
-    console.error('MongoDB URL:', process.env.MONGO_URL || 'mongodb://admin:password123@localhost:27017/testbg?authSource=admin');
+    console.error('MongoDB URL:', process.env.TICKET_DATABASE_URL);
     // Don't exit process, just log the error
   }
 };
