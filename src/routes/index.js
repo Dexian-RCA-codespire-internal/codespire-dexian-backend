@@ -5,7 +5,6 @@ const router = express.Router();
 const authRoutes = require('./auth');
 const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
-const novuRoutes = require('./novu');
 const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
 
@@ -13,7 +12,6 @@ const servicenowPollingRoutes = require('./servicenowPolling');
 router.use('/auth', authRoutes);
 router.use('/llm', llmRoutes);
 router.use('/s3', s3Routes);
-router.use('/novu', novuRoutes);
 router.use('/tickets', ticketsRoutes);
 router.use('/servicenow-polling', servicenowPollingRoutes);
 
@@ -27,7 +25,6 @@ router.get('/', (req, res) => {
       auth: '/auth',
       llm: '/llm',
       s3: '/s3',
-      novu: '/novu',
       tickets: '/tickets',
       servicenowPolling: '/servicenow-polling'
     }
