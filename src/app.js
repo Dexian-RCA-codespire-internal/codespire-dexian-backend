@@ -26,7 +26,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: [
+  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
     'http://localhost:3001', // Frontend URL
     'http://localhost:3002', // Frontend URL
     'http://localhost:3000'

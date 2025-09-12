@@ -28,7 +28,7 @@ router.get('/', (req, res) => {
       llm: '/llm',
       s3: '/s3',
       tickets: '/tickets',
-      servicenowPolling: '/servicenow-polling'
+      servicenowPolling: '/servicenow-polling',
       chat: '/chat',
     }
   });

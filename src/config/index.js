@@ -11,6 +11,10 @@ const config = {
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD
   },
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL: process.env.GEMINI_MODEL,
+  GEMINI_MAX_TOKENS: process.env.GEMINI_MAX_TOKENS,
+  GEMINI_TEMPERATURE: process.env.GEMINI_TEMPERATURE,
   
   // SuperTokens configuration
   supertokens: {
