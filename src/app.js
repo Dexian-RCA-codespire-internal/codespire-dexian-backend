@@ -14,6 +14,11 @@ console.log('✅ SuperTokens initialized');
 const { connectMongoDB } = require('./config/database/mongodb');
 connectMongoDB();
 
+// Initialize ServiceNow Polling Service
+const { pollingService } = require('./services/servicenowPollingService');
+const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
+const config = require('./config');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -331,9 +336,56 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  
+  // Initialize ServiceNow bulk import if enabled and not already completed
+  console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
+  if (config.servicenow.enableBulkImport) {
+    try {
+      // Check if bulk import has already been completed
+      const alreadyCompleted = await hasCompletedBulkImport();
+      
+      if (alreadyCompleted) {
+        const status = await getBulkImportStatus();
+        console.log('ℹ️ Bulk import already completed. Skipping startup import.');
+        console.log(`   - Last import: ${status.lastImportTime}`);
+        console.log(`   - Total imported: ${status.totalImported}`);
+        console.log('   - Use manual endpoint to force re-import if needed');
+      } else {
+        console.log('🔄 Starting ServiceNow bulk import (first time setup)...');
+        const result = await bulkImportAllTickets({
+          batchSize: config.servicenow.bulkImportBatchSize
+        });
+        
+        if (result.success) {
+          console.log(`✅ ServiceNow bulk import completed successfully:`);
+          console.log(`   - Total tickets imported: ${result.total}`);
+          console.log(`   - New tickets: ${result.database.saved}`);
+          console.log(`   - Updated tickets: ${result.database.updated}`);
+          console.log(`   - Errors: ${result.database.errors}`);
+        } else {
+          console.error('❌ ServiceNow bulk import failed:', result.error);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to perform ServiceNow bulk import:', error);
+    }
+  } else {
+    console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
+  }
+  
+  // Initialize ServiceNow polling service if enabled
+  if (config.servicenow.enablePolling) {
+    try {
+      await pollingService.initialize();
+    } catch (error) {
+      console.error('❌ Failed to initialize ServiceNow polling service:', error);
+    }
+  } else {
+    console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+  }
 });
 
 module.exports = app;
