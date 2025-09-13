@@ -1,26 +1,34 @@
 /**
- * Ticket Similarity Agent Module Entry Point
- * Exports the main agent and configuration for easy integration
+ * Ticket Similarity Agent Module Entry Point - Refactored
+ * Uses shared components with functional approach
  */
 
-const TicketSimilarityAgent = require('./agents/ticket-similarity-agent');
-const TicketRetriever = require('./tools/ticket-retriever');
-const ResultFilter = require('./tools/result-filter');
-const { ProviderFactory } = require('./config/langchain-providers');
-const API_CONFIG = require('./config/api-config');
+const searchAgent = require('./search-agent');
+const service = require('./service');
+const config = require('./config');
 
 module.exports = {
-    // Main agent class
-    TicketSimilarityAgent,
+    // Main service interface
+    service,
     
-    // Individual components for advanced usage
-    TicketRetriever,
-    ResultFilter,
-    ProviderFactory,
+    // Search agent for direct access
+    searchAgent,
     
     // Configuration
-    API_CONFIG,
+    config,
     
-    // Convenience factory function
-    createAgent: (options = {}) => new TicketSimilarityAgent(options)
+    // Convenience methods
+    findSimilarTickets: (inputTicket, options) => service.findSimilarTickets(inputTicket, options),
+    generateExplanation: (inputTicket, results) => service.generateSimilarityExplanation(inputTicket, results),
+    healthCheck: () => service.checkHealth(),
+    getCapabilities: () => service.getCapabilities(),
+    
+    // Legacy support - for backward compatibility
+    createAgent: (options = {}) => ({
+        findSimilarTickets: (ticket, opts) => service.findSimilarTickets(ticket, { ...options, ...opts }),
+        generateSimilarityExplanation: (ticket, results) => service.generateSimilarityExplanation(ticket, results),
+        healthCheck: () => service.checkHealth(),
+        getCapabilities: () => service.getCapabilities(),
+        validateTicketInput: (ticket) => service.validateTicketInput(ticket)
+    })
 };

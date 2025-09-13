@@ -3,6 +3,7 @@
 
 const config = require('../index');
 const QdrantConfig = require('./qdrant');
+const { connectMongoDB } = require('./mongodb');
 
 // Import database connections based on configuration
 let dbConnection = null;
@@ -13,6 +14,16 @@ let qdrantInstance = null;
 const initializeDatabase = async () => {
   try {
     console.log('📊 Initializing databases...');
+    
+    // Initialize MongoDB first (required for most operations)
+    try {
+      await connectMongoDB();
+      console.log('✅ MongoDB database initialized successfully');
+    } catch (error) {
+      console.error('❌ MongoDB initialization failed:', error.message);
+      // MongoDB is critical, so we should throw the error
+      throw error;
+    }
     
     // Initialize Qdrant vector database
     if (process.env.ENABLE_QDRANT !== 'false') {
@@ -25,9 +36,6 @@ const initializeDatabase = async () => {
         // Continue with other databases even if Qdrant fails
       }
     }
-    
-    // You can extend this to support multiple database types
-    // Add other database initializations here
     
     console.log('✅ Database initialization completed');
   } catch (error) {

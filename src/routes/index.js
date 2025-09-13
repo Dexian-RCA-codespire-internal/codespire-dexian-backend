@@ -5,13 +5,17 @@ const router = express.Router();
 const authRoutes = require('./auth');
 const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
-const ticketRoutes = require('./tickets');
+const ticketsRoutes = require('./tickets');
+const servicenowPollingRoutes = require('./servicenowPolling');
+const ticketSimilarityRoutes = require('./ticketSimilarity');
 
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/llm', llmRoutes);
 router.use('/s3', s3Routes);
-router.use('/tickets', ticketRoutes);
+router.use('/tickets', ticketsRoutes);
+router.use('/servicenow-polling', servicenowPollingRoutes);
+router.use('/ticket-similarity', ticketSimilarityRoutes); // Mount ticket similarity routes under /ticket-similarity
 
 // Default route
 router.get('/', (req, res) => {
@@ -24,6 +28,7 @@ router.get('/', (req, res) => {
       llm: '/llm',
       s3: '/s3',
       tickets: '/tickets',
+      servicenowPolling: '/servicenow-polling'
     }
   });
 });

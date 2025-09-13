@@ -4,7 +4,7 @@
  */
 
 const { validationResult } = require('express-validator');
-const ticketService = require('../services/ticketService');
+const ticketService = require('../agents/ticket-similarity/service');
 
 /**
  * Find similar tickets based on input ticket data
@@ -35,25 +35,18 @@ const findSimilarTickets = async (req, res) => {
         const options = ticketService.parseSearchOptions(req.query);
 
         // Find similar tickets
-        const startTime = Date.now();
         const results = await ticketService.findSimilarTickets(inputTicket, options);
-        const processingTime = Date.now() - startTime;
 
         // Generate explanation if requested
-        let explanation = null;
-        if (req.query.explain === 'true' && results.total_results > 0) {
-            explanation = await ticketService.generateSimilarityExplanation(inputTicket, results);
+        if (req.query.explain === 'true' && results.success && results.data.total_results > 0) {
+            const explanationResult = await ticketService.generateSimilarityExplanation(inputTicket, results.data.results);
+            if (explanationResult.success && explanationResult.data.explanation) {
+                results.data.explanation = explanationResult.data.explanation;
+            }
         }
 
-        // Format and send response
-        const response = ticketService.formatSearchResponse(
-            inputTicket, 
-            results, 
-            processingTime, 
-            explanation
-        );
-
-        res.json(response);
+        // Send response (already formatted by the service)
+        res.json(results);
 
     } catch (error) {
         console.error('Error in similar tickets endpoint:', error);
@@ -74,11 +67,7 @@ const checkHealth = async (req, res) => {
         const health = await ticketService.checkHealth();
         
         const statusCode = health.status === 'healthy' ? 200 : 503;
-        res.status(statusCode).json({
-            success: health.status === 'healthy',
-            ...health,
-            timestamp: new Date().toISOString()
-        });
+        res.status(statusCode).json(health);
     } catch (error) {
         console.error('Error in health check:', error);
         res.status(503).json({

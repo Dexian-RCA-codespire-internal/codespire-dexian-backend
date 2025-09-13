@@ -1,27 +1,24 @@
 /**
  * Ticket Routes
- * API endpoints for ticket-related operations including similarity search
+ * API endpoints for ticket-related operations including similarity search and CRUD operations
  */
 
 const express = require('express');
-const ticketController = require('../controllers/ticketController');
-const { validateSimilarTicketsRequest } = require('../validators/ticketValidators');
+const { getTickets, getTicket, getTicketStatistics } = require('../controllers/ticketsController');
+
 
 const router = express.Router();
 
-/**
- * POST /api/tickets/similar
- * Find similar tickets based on input ticket data
- */
-router.post('/similar', 
-    validateSimilarTicketsRequest,
-    ticketController.findSimilarTickets
-);
+// Ticket CRUD operations
+// GET /api/tickets - Fetch all tickets from MongoDB
+router.get('/', getTickets);
 
-/**
- * GET /api/tickets/similarity/health
- * Health check for the ticket similarity service
- */
-router.get('/similarity/health', ticketController.checkHealth);
+// GET /api/tickets/stats - Get ticket statistics
+router.get('/stats', getTicketStatistics);
+
+// GET /api/tickets/:ticketId - Get a specific ticket by ID
+router.get('/:ticketId', getTicket);
+
+
 
 module.exports = router;

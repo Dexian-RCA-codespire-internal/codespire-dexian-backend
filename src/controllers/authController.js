@@ -802,7 +802,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
     
     // Create reset link
-    const resetLink = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/reset-password?token=${resetToken}`;
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/reset-password?token=${resetToken}`;
     
     // Send reset email with the link using our custom email service
     const emailResult = await emailService.sendPasswordResetEmail(
