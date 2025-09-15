@@ -1,6 +1,7 @@
 // new file servicenow
 const cron = require('node-cron');
 const { fetchTicketsAndSave } = require('./servicenowIngestionService');
+const { webSocketService } = require('./websocketService');
 const config = require('../config');
 const mongoose = require('mongoose');
 
@@ -175,6 +176,25 @@ class ServiceNowPollingService {
           timestamp: currentTime
         });
 
+        // Emit WebSocket events for real-time updates
+        if (newTicketsCount > 0 || updatedTicketsCount > 0) {
+          webSocketService.emitPollingStatus({
+            newTickets: newTicketsCount,
+            updatedTickets: updatedTicketsCount,
+            totalProcessed: result.total,
+            timestamp: currentTime,
+            status: 'success'
+          });
+
+          // Emit notification for new tickets
+          if (newTicketsCount > 0) {
+            webSocketService.emitNotification(
+              `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
+              'success'
+            );
+          }
+        }
+
       } else {
         throw new Error(result.error || 'Unknown error during polling');
       }
@@ -196,6 +216,18 @@ class ServiceNowPollingService {
         error: error.message,
         timestamp: new Date()
       });
+
+      // Emit WebSocket error event
+      webSocketService.emitPollingStatus({
+        error: error.message,
+        timestamp: new Date(),
+        status: 'error'
+      });
+
+      webSocketService.emitNotification(
+        `ServiceNow polling error: ${error.message}`,
+        'error'
+      );
 
       // Implement retry logic if needed
       await this.handlePollingError(error);

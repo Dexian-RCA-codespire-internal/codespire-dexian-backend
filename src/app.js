@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const http = require('http');
 require('dotenv').config();
 
 // Initialize SuperTokens
@@ -17,11 +18,13 @@ connectMongoDB();
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
+const { webSocketService } = require('./services/websocketService');
 const config = require('./config');
 
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const server = http.createServer(app);
+const PORT = process.env.PORT || 8081;
 
 // Middleware
 app.use(helmet());
@@ -152,9 +155,13 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, async () => {
+// Initialize WebSocket service
+webSocketService.initialize(server);
+
+server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed
   console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
@@ -204,4 +211,4 @@ app.listen(PORT, async () => {
   }
 });
 
-module.exports = app;
+module.exports = { app, server };

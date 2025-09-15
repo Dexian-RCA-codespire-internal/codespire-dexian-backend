@@ -2,6 +2,7 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const { webSocketService } = require('./websocketService');
 const mongoose = require('mongoose');
 
 // Bulk Import State Schema
@@ -235,14 +236,20 @@ const fetchTicketsAndSave = async (options = {}) => {
           const newTicket = new Ticket(ticketDoc);
           await newTicket.save();
           savedCount++;
+          
+          // Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
         } else {
           // Update existing ticket
-          await Ticket.findOneAndUpdate(
+          const updatedTicket = await Ticket.findOneAndUpdate(
             { ticket_id: ticketData.number, source: 'ServiceNow' },
             ticketDoc,
             { new: true }
           );
           updatedCount++;
+          
+          // Emit WebSocket event for updated ticket
+          webSocketService.emitUpdatedTicket(updatedTicket.toObject());
         }
       } catch (error) {
         console.error(`❌ Error saving ticket ${ticketData.number}:`, error.message);
@@ -402,14 +409,20 @@ const bulkImportAllTickets = async (options = {}) => {
           const newTicket = new Ticket(ticketDoc);
           await newTicket.save();
           savedCount++;
+          
+          // Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
         } else {
           // Update existing ticket
-          await Ticket.findOneAndUpdate(
+          const updatedTicket = await Ticket.findOneAndUpdate(
             { ticket_id: ticketData.number, source: 'ServiceNow' },
             ticketDoc,
             { new: true }
           );
           updatedCount++;
+          
+          // Emit WebSocket event for updated ticket
+          webSocketService.emitUpdatedTicket(updatedTicket.toObject());
         }
       } catch (error) {
         console.error(`❌ Error saving ticket ${ticketData.number}:`, error.message);
