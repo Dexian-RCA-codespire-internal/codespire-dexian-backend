@@ -127,10 +127,13 @@ const getTicketById = async (ticketId, source = 'ServiceNow') => {
   try {
     console.log(`📥 Fetching ticket ${ticketId} from MongoDB...`);
     
-    const ticket = await Ticket.findOne({ 
+    let ticket = await Ticket.findOne({ 
       ticket_id: ticketId, 
       source: source 
     }).lean();
+    if(!ticket || !ticket?._id){
+      ticket = await Ticket.findById({_id: ticketId}).lean();
+    }
 
     if (!ticket) {
       return {
