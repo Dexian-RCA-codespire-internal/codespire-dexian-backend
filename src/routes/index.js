@@ -7,6 +7,7 @@ const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
 const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
+const ticketSimilarityRoutes = require('./ticketSimilarity');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -14,6 +15,7 @@ router.use('/llm', llmRoutes);
 router.use('/s3', s3Routes);
 router.use('/tickets', ticketsRoutes);
 router.use('/servicenow-polling', servicenowPollingRoutes);
+router.use('/ticket-similarity', ticketSimilarityRoutes); // Mount ticket similarity routes under /ticket-similarity
 
 // Default route
 router.get('/', (req, res) => {

@@ -123,4 +123,27 @@ router.post('/bulk-import/reset', async (req, res) => {
   }
 });
 
+// Test vectorization service health
+router.get('/vectorization/health', async (req, res) => {
+  try {
+    const ticketVectorizationService = require('../services/ticketVectorizationService');
+    const health = await ticketVectorizationService.healthCheck();
+    
+    const statusCode = health.status === 'healthy' ? 200 : 503;
+    res.status(statusCode).json({
+      success: health.status === 'healthy',
+      ...health,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error checking vectorization health:', error);
+    res.status(503).json({
+      success: false,
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 module.exports = router;

@@ -1,23 +1,43 @@
 // Database configuration and models
 // This file serves as the main entry point for database operations
 
-const config = require('../config');
+const config = require('../index');
+const QdrantConfig = require('./qdrant');
+const { connectMongoDB } = require('./mongodb');
 
 // Import database connections based on configuration
 let dbConnection = null;
 let User = null;
+let qdrantInstance = null;
 
 // Initialize database based on configuration
 const initializeDatabase = async () => {
   try {
-    // For now, we'll use a simple approach
-    // In a real application, you might want to support multiple databases
-    console.log('📊 Initializing database...');
+    console.log('📊 Initializing databases...');
     
-    // You can extend this to support multiple database types
-    // For now, we'll create a placeholder
+    // Initialize MongoDB first (required for most operations)
+    try {
+      await connectMongoDB();
+      console.log('✅ MongoDB database initialized successfully');
+    } catch (error) {
+      console.error('❌ MongoDB initialization failed:', error.message);
+      // MongoDB is critical, so we should throw the error
+      throw error;
+    }
     
-    console.log('✅ Database initialized successfully');
+    // Initialize Qdrant vector database
+    if (process.env.ENABLE_QDRANT !== 'false') {
+      try {
+        qdrantInstance = new QdrantConfig();
+        await qdrantInstance.connect();
+        console.log('✅ Qdrant vector database initialized successfully');
+      } catch (error) {
+        console.error('❌ Qdrant initialization failed:', error.message);
+        // Continue with other databases even if Qdrant fails
+      }
+    }
+    
+    console.log('✅ Database initialization completed');
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
     throw error;
@@ -27,14 +47,42 @@ const initializeDatabase = async () => {
 // Database utility functions
 const getConnection = () => dbConnection;
 const getUserModel = () => User;
+const getQdrantInstance = () => qdrantInstance;
 
 // Health check for database
 const healthCheck = async () => {
   try {
-    // Implement your database health check logic here
-    return { status: 'healthy', timestamp: new Date().toISOString() };
+    const results = {
+      timestamp: new Date().toISOString(),
+      databases: {}
+    };
+
+    // Check Qdrant health
+    if (qdrantInstance) {
+      try {
+        const qdrantClient = qdrantInstance.getClient();
+        await qdrantClient.getCollections();
+        results.databases.qdrant = { status: 'healthy' };
+      } catch (error) {
+        results.databases.qdrant = { status: 'unhealthy', error: error.message };
+      }
+    } else {
+      results.databases.qdrant = { status: 'not_initialized' };
+    }
+
+    // Add health checks for other databases here
+
+    const allHealthy = Object.values(results.databases)
+      .every(db => db.status === 'healthy' || db.status === 'not_initialized');
+
+    results.overall = allHealthy ? 'healthy' : 'unhealthy';
+    return results;
   } catch (error) {
-    return { status: 'unhealthy', error: error.message, timestamp: new Date().toISOString() };
+    return { 
+      overall: 'unhealthy', 
+      error: error.message, 
+      timestamp: new Date().toISOString() 
+    };
   }
 };
 
@@ -42,5 +90,6 @@ module.exports = {
   initializeDatabase,
   getConnection,
   getUserModel,
+  getQdrantInstance,
   healthCheck
 };

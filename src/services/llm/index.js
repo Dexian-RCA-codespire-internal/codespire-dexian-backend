@@ -9,6 +9,7 @@ class LLMManager {
     this.services.set('openai', null);
     this.services.set('anthropic', null);
     this.services.set('ollama', null);
+    this.services.set('gemini', null);
   }
 
   getService(serviceName) {
@@ -30,6 +31,10 @@ class LLMManager {
         case 'ollama':
           const { OllamaService } = require('./ollama');
           this.services.set('ollama', new OllamaService());
+          break;
+        case 'gemini':
+          const { GeminiService } = require('./gemini');
+          this.services.set('gemini', new GeminiService());
           break;
       }
     }
