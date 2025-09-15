@@ -16,7 +16,7 @@ class TicketSuggestionService {
     /**
      * Generate ticket resolution suggestions based on similar tickets
      */
-    async generateTicketSuggestions(similarTickets, currentTicket = null) {
+    async generateTicketSuggestions(similarTickets, currentTicket = null, options = {}) {
         try {
             const startTime = Date.now();
             
@@ -27,6 +27,11 @@ class TicketSuggestionService {
                     'Validation failed',
                     validation.errors.join(', ')
                 );
+            }
+            
+            // Check if skeleton loader is requested
+            if (options.skeleton === true) {
+                return this.generateSkeletonResponse(similarTickets, currentTicket);
             }
             
             // Generate suggestions using the search agent
@@ -58,6 +63,50 @@ class TicketSuggestionService {
                 error.message
             );
         }
+    }
+
+    /**
+     * Generate skeleton response for loading states
+     */
+    generateSkeletonResponse(similarTickets, currentTicket = null) {
+        const skeletonSuggestions = [
+            {
+                id: 1,
+                suggestion: "Loading suggestion 1...",
+                confidence: "loading",
+                isSkeleton: true
+            },
+            {
+                id: 2,
+                suggestion: "Loading suggestion 2...",
+                confidence: "loading",
+                isSkeleton: true
+            },
+            {
+                id: 3,
+                suggestion: "Loading suggestion 3...",
+                confidence: "loading",
+                isSkeleton: true
+            }
+        ];
+
+        return createSuccessResponse({
+            input_tickets_count: similarTickets.length,
+            current_ticket: currentTicket ? {
+                ticket_id: currentTicket.ticket_id,
+                short_description: currentTicket.short_description,
+                category: currentTicket.category
+            } : null,
+            suggestions: skeletonSuggestions,
+            processing_time_ms: 0,
+            isSkeleton: true,
+            metadata: {
+                max_suggestions: config.suggestions.maxSuggestions,
+                llm_provider: 'gemini',
+                temperature: 0.1,
+                skeleton_mode: true
+            }
+        }, 'Skeleton response generated for loading state');
     }
 
     /**

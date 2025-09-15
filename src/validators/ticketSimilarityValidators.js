@@ -109,7 +109,18 @@ const validateTicketSuggestionsRequest = [
     body('currentTicket.category')
         .optional()
         .isString()
-        .withMessage('Current ticket category must be a string')
+        .withMessage('Current ticket category must be a string'),
+    
+    // Options validation (optional)
+    body('options')
+        .optional()
+        .isObject()
+        .withMessage('Options must be an object'),
+    
+    body('options.skeleton')
+        .optional()
+        .isBoolean()
+        .withMessage('Skeleton option must be a boolean')
 ];
 
 module.exports = {

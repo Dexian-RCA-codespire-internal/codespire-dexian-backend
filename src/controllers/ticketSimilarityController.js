@@ -75,11 +75,11 @@ const generateTicketSuggestions = async (req, res) => {
             });
         }
 
-        // Extract similar tickets and current ticket from request body
-        const { similarTickets, currentTicket } = req.body;
+        // Extract similar tickets, current ticket, and options from request body
+        const { similarTickets, currentTicket, options = {} } = req.body;
 
         // Generate suggestions using the dedicated suggestion service
-        const results = await suggestionService.generateTicketSuggestions(similarTickets, currentTicket);
+        const results = await suggestionService.generateTicketSuggestions(similarTickets, currentTicket, options);
 
         // Send response
         res.json(results);
