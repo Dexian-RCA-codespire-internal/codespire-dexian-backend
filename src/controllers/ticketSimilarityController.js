@@ -5,6 +5,7 @@
 
 const { validationResult } = require('express-validator');
 const ticketService = require('../agents/ticket-similarity/service');
+const suggestionService = require('../agents/ticket-suggestion/service');
 
 /**
  * Find similar tickets based on input ticket data
@@ -59,6 +60,41 @@ const findSimilarTickets = async (req, res) => {
 };
 
 /**
+ * Generate ticket resolution suggestions based on similar tickets
+ * POST /api/ticket-similarity/suggestions
+ */
+const generateTicketSuggestions = async (req, res) => {
+    try {
+        // Check validation results
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        // Extract similar tickets and current ticket from request body
+        const { similarTickets, currentTicket } = req.body;
+
+        // Generate suggestions using the dedicated suggestion service
+        const results = await suggestionService.generateTicketSuggestions(similarTickets, currentTicket);
+
+        // Send response
+        res.json(results);
+
+    } catch (error) {
+        console.error('Error in ticket suggestions endpoint:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while generating ticket suggestions',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+};
+
+/**
  * Health check for the ticket similarity service
  * GET /api/tickets/similarity/health
  */
@@ -81,5 +117,6 @@ const checkHealth = async (req, res) => {
 
 module.exports = {
     findSimilarTickets,
+    generateTicketSuggestions,
     checkHealth
 };
