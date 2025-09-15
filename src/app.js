@@ -198,6 +198,53 @@ server.listen(PORT, async () => {
   } else {
     console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
   }
+
+  // Auto-trigger bulk import if database is empty (regardless of bulk import state)
+  try {
+    const { getTicketStats } = require('./services/ticketsService');
+    const stats = await getTicketStats('ServiceNow');
+    
+    if (stats.success && stats.data.total === 0) {
+      console.log('🔍 Database is empty - auto-triggering bulk import...');
+      console.log('ℹ️ First-time setup detected. This may take a few minutes.');
+      
+      // Reset bulk import state to allow fresh import
+      const { resetBulkImportState } = require('./services/servicenowIngestionService');
+      await resetBulkImportState();
+      console.log('🔄 Bulk import state reset for fresh import');
+      
+      // Trigger bulk import
+      const { bulkImportAllTickets } = require('./services/servicenowIngestionService');
+      const result = await bulkImportAllTickets({
+        batchSize: config.servicenow.bulkImportBatchSize,
+        force: true // Force import even if state says completed
+      });
+      
+      if (result.success) {
+        console.log(`✅ Auto bulk import completed successfully:`);
+        console.log(`   - Total tickets imported: ${result.total}`);
+        console.log(`   - New tickets: ${result.database.saved}`);
+        console.log(`   - Updated tickets: ${result.database.updated}`);
+        console.log(`   - Errors: ${result.database.errors}`);
+        
+        // Emit notification to frontend about completion
+        webSocketService.emitNotification(
+          `Initial data import completed: ${result.total} tickets loaded`,
+          'success'
+        );
+      } else {
+        console.error('❌ Auto bulk import failed:', result.error);
+        webSocketService.emitNotification(
+          'Initial data import failed. Please check server logs.',
+          'error'
+        );
+      }
+    } else if (stats.success) {
+      console.log(`ℹ️ Database contains ${stats.data.total} tickets - no auto-import needed`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to check database status for auto-import:', error);
+  }
   
   // Initialize ServiceNow polling service if enabled
   if (config.servicenow.enablePolling) {
