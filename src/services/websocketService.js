@@ -280,7 +280,7 @@ class WebSocketService {
       console.log(`🔄 Starting initial sync for client ${clientId}`);
       
       const { 
-        batchSize = 50, 
+        batchSize = 200, // Increased from 50 to 200 for faster sync
         source = 'ServiceNow',
         sortBy = 'opened_time',
         sortOrder = 'desc'
@@ -335,7 +335,7 @@ class WebSocketService {
           });
           
           // Small delay between batches to prevent overwhelming the client
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms to 50ms
         }
       }
 
