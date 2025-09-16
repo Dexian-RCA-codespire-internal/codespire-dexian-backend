@@ -31,6 +31,8 @@ class ServiceNowPollingService {
     this.pollingInterval = config.servicenow.pollingInterval || '*/1 * * * *'; // Every minute
     this.maxRetries = config.servicenow.maxRetries || 3;
     this.retryDelay = config.servicenow.retryDelay || 5000; // 5 seconds
+    this.healthCheckInterval = null;
+    this.healthCheckIntervalMinutes = 1; // Run health check every 1 minute
   }
 
   /**
@@ -45,6 +47,9 @@ class ServiceNowPollingService {
       
       // Start the cron job
       this.startPolling();
+      
+      // Start periodic health check
+      this.startPeriodicHealthCheck();
       
       console.log('✅ ServiceNow polling service initialized successfully');
     } catch (error) {
@@ -107,20 +112,37 @@ class ServiceNowPollingService {
       this.cronJob.stop();
       this.cronJob = null;
       this.isRunning = false;
-      console.log('⏹️ ServiceNow polling service stopped');
     }
+    
+    // Stop periodic health check
+    this.stopPeriodicHealthCheck();
+    
+    console.log('⏹️ ServiceNow polling service stopped');
   }
 
   /**
-   * Validate ServiceNow credentials
+   * Step 1: Check if ServiceNow credentials are configured
    */
-  async validateCredentials() {
-    // Check if credentials are configured
-    if (!config.servicenow.url || !config.servicenow.username || !config.servicenow.password) {
-      throw new Error('ServiceNow credentials not configured');
+  checkCredentialsConfigured() {
+    const hasUrl = !!config.servicenow.url;
+    const hasUsername = !!config.servicenow.username;
+    const hasPassword = !!config.servicenow.password;
+    
+    if (!hasUrl || !hasUsername || !hasPassword) {
+      const missing = [];
+      if (!hasUrl) missing.push('URL');
+      if (!hasUsername) missing.push('Username');
+      if (!hasPassword) missing.push('Password');
+      throw new Error(`ServiceNow credentials not configured: Missing ${missing.join(', ')}`);
     }
     
-    // Test connection with a simple API call
+    return true;
+  }
+
+  /**
+   * Step 2: Test ServiceNow API connectivity
+   */
+  async testServiceNowConnectivity() {
     try {
       const axios = require('axios');
       const testClient = axios.create({
@@ -133,21 +155,199 @@ class ServiceNowPollingService {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: 10000 // 10 second timeout for credential test
+        timeout: 15000 // 15 second timeout for connectivity test
       });
       
-      // Make a simple test call
-      await testClient.get('/api/now/table/incident?sysparm_limit=1');
-      return true;
+      // Make a simple test call to verify connectivity
+      const response = await testClient.get('/api/now/table/incident?sysparm_limit=1');
+      
+      if (response.status === 200) {
+        return { success: true, message: 'ServiceNow API accessible' };
+      } else {
+        throw new Error(`ServiceNow API returned status: ${response.status}`);
+      }
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new Error('Invalid ServiceNow credentials');
-      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        throw new Error('Cannot connect to ServiceNow instance');
+        throw new Error('Invalid ServiceNow credentials - authentication failed');
+      } else if (error.code === 'ECONNREFUSED') {
+        throw new Error('Cannot connect to ServiceNow instance - connection refused');
+      } else if (error.code === 'ENOTFOUND') {
+        throw new Error('ServiceNow URL not found - check URL configuration');
+      } else if (error.code === 'ETIMEDOUT') {
+        throw new Error('ServiceNow connection timeout - check network connectivity');
       } else {
-        throw new Error(`ServiceNow connection failed: ${error.message}`);
+        throw new Error(`ServiceNow connectivity test failed: ${error.message}`);
       }
     }
+  }
+
+  /**
+   * Step 3: Comprehensive ServiceNow health check (credentials + connectivity)
+   */
+  async performHealthCheck() {
+    console.log('🔍 Starting ServiceNow health check...');
+    
+    try {
+      // Step 1: Check credentials
+      console.log('📋 Step 1: Checking credentials configuration...');
+      this.checkCredentialsConfigured();
+      console.log('✅ Credentials are configured');
+      
+      // Step 2: Test connectivity
+      console.log('🌐 Step 2: Testing ServiceNow API connectivity...');
+      const connectivityResult = await this.testServiceNowConnectivity();
+      console.log(`✅ ${connectivityResult.message}`);
+      
+      // If we get here, everything is healthy
+      console.log('🎉 ServiceNow health check passed - all systems operational');
+      
+      return {
+        success: true,
+        message: 'ServiceNow is healthy and accessible',
+        steps: {
+          credentialsConfigured: true,
+          connectivityTest: true
+        }
+      };
+      
+    } catch (error) {
+      console.error(`❌ ServiceNow health check failed: ${error.message}`);
+      
+      return {
+        success: false,
+        message: error.message,
+        steps: {
+          credentialsConfigured: error.message.includes('credentials not configured') ? false : true,
+          connectivityTest: error.message.includes('credentials not configured') ? null : false
+        }
+      };
+    }
+  }
+
+  /**
+   * Start periodic health check that emits WebSocket events
+   */
+  startPeriodicHealthCheck() {
+    if (this.healthCheckInterval) {
+      console.log('🔄 Periodic health check already running');
+      return;
+    }
+
+    console.log(`🔍 Starting periodic health check every ${this.healthCheckIntervalMinutes} minute(s)`);
+    
+    this.healthCheckInterval = setInterval(async () => {
+      try {
+        console.log('🔍 Running periodic ServiceNow health check...');
+        await this.performHealthCheckAndEmit();
+        console.log('✅ Periodic health check completed');
+      } catch (error) {
+        console.error('❌ Periodic health check error:', error);
+      }
+    }, this.healthCheckIntervalMinutes * 60 * 1000); // Convert minutes to milliseconds
+  }
+
+  /**
+   * Stop periodic health check
+   */
+  stopPeriodicHealthCheck() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+      console.log('⏹️ Periodic health check stopped');
+    }
+  }
+
+  /**
+   * Perform health check and emit WebSocket event with result
+   */
+  async performHealthCheckAndEmit() {
+    const healthCheck = await this.performHealthCheck();
+    
+    if (healthCheck.success) {
+      // Health check passed - update database and emit success
+      await PollingState.updateOne(
+        { service: 'servicenow' },
+        {
+          $set: {
+            isActive: true,
+            isHealthy: true,
+            consecutiveFailures: 0,
+            lastError: null
+          }
+        },
+        { upsert: true }
+      );
+      
+      // Emit WebSocket status update
+      webSocketService.emitPollingStatus({
+        timestamp: new Date(),
+        status: 'healthy',
+        isActive: true,
+        isHealthy: true,
+        message: healthCheck.message
+      });
+    } else {
+      // Health check failed - update database and emit error
+      await PollingState.updateOne(
+        { service: 'servicenow' },
+        {
+          $set: {
+            isActive: false,
+            isHealthy: false,
+            consecutiveFailures: 1,
+            lastError: healthCheck.message
+          }
+        },
+        { upsert: true }
+      );
+      
+      // Emit WebSocket status update immediately
+      webSocketService.emitPollingStatus({
+        timestamp: new Date(),
+        status: 'error',
+        isActive: false,
+        isHealthy: false,
+        message: healthCheck.message
+      });
+    }
+    
+    return healthCheck;
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   */
+  async validateCredentials() {
+    const healthCheck = await this.performHealthCheck();
+    
+    if (!healthCheck.success) {
+      // Health check failed - emit WebSocket event immediately
+      await PollingState.updateOne(
+        { service: 'servicenow' },
+        {
+          $set: {
+            isActive: false,
+            isHealthy: false,
+            consecutiveFailures: 1,
+            lastError: healthCheck.message
+          }
+        },
+        { upsert: true }
+      );
+      
+      // Emit WebSocket status update immediately
+      webSocketService.emitPollingStatus({
+        timestamp: new Date(),
+        status: 'error',
+        isActive: false,
+        isHealthy: false,
+        message: healthCheck.message
+      });
+      
+      throw new Error(healthCheck.message);
+    }
+    
+    return true;
   }
 
   /**
@@ -363,18 +563,76 @@ class ServiceNowPollingService {
   }
 
   /**
-   * Reset polling status to healthy (used on server startup)
+   * Reset polling status based on health check (used on server startup)
    */
   async resetPollingStatus() {
     try {
+      // Perform immediate health check
+      const healthCheck = await this.performHealthCheck();
+      
+      if (healthCheck.success) {
+        // Health check passed - set to healthy
+        await PollingState.updateOne(
+          { service: 'servicenow' },
+          {
+            $set: {
+              isActive: true,
+              isHealthy: true,
+              consecutiveFailures: 0,
+              lastError: null
+            }
+          },
+          { upsert: true }
+        );
+        
+        // Emit WebSocket status update
+        webSocketService.emitPollingStatus({
+          timestamp: new Date(),
+          status: 'healthy',
+          isActive: true,
+          isHealthy: true,
+          message: 'ServiceNow health check passed - system operational'
+        });
+        
+        console.log('✅ ServiceNow health check passed - polling status set to healthy');
+      } else {
+        // Health check failed - set to unhealthy
+        await PollingState.updateOne(
+          { service: 'servicenow' },
+          {
+            $set: {
+              isActive: false,
+              isHealthy: false,
+              consecutiveFailures: 1,
+              lastError: healthCheck.message
+            }
+          },
+          { upsert: true }
+        );
+        
+        // Emit WebSocket status update
+        webSocketService.emitPollingStatus({
+          timestamp: new Date(),
+          status: 'error',
+          isActive: false,
+          isHealthy: false,
+          message: healthCheck.message
+        });
+        
+        console.log(`❌ ServiceNow health check failed - polling status set to unhealthy: ${healthCheck.message}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to perform health check:', error);
+      
+      // If health check itself fails, set to unhealthy
       await PollingState.updateOne(
         { service: 'servicenow' },
         {
           $set: {
-            isActive: true,
-            isHealthy: true,
-            consecutiveFailures: 0,
-            lastError: null
+            isActive: false,
+            isHealthy: false,
+            consecutiveFailures: 1,
+            lastError: `Health check failed: ${error.message}`
           }
         },
         { upsert: true }
@@ -383,15 +641,12 @@ class ServiceNowPollingService {
       // Emit WebSocket status update
       webSocketService.emitPollingStatus({
         timestamp: new Date(),
-        status: 'reset',
-        isActive: true,
-        isHealthy: true,
-        message: 'Polling status reset to healthy on server startup'
+        status: 'error',
+        isActive: false,
+        isHealthy: false,
+        message: `Health check failed: ${error.message}`
       });
       
-      console.log('✅ Polling status reset to healthy');
-    } catch (error) {
-      console.error('❌ Failed to reset polling status:', error);
       throw error;
     }
   }

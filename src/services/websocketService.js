@@ -140,8 +140,9 @@ class WebSocketService {
       timestamp: new Date().toISOString()
     };
 
+    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients:`, eventData);
     this.io.emit('polling_status', eventData);
-    console.log(`📡 Emitted polling status to ${this.connectedClients.size} clients`);
+    console.log(`✅ Polling status emitted successfully`);
   }
 
   /**
