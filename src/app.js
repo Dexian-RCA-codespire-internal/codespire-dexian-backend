@@ -11,9 +11,11 @@ initSuperTokens();
 
 console.log('✅ SuperTokens initialized');
 
-// Initialize MongoDB
-const { connectMongoDB } = require('./config/database/mongodb');
-connectMongoDB();
+// Initialize all databases (MongoDB and Qdrant)
+const { initializeDatabase } = require('./config/database');
+initializeDatabase().catch(error => {
+  console.error('Failed to initialize databases:', error);
+});
 
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
@@ -23,7 +25,7 @@ const config = require('./config');
 
 
 const app = express();
-const server = http.createServer(app);
+
 const PORT = process.env.PORT || 8081;
 
 // Middleware
@@ -48,7 +50,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the current health status of the server
+ *     tags:
+ *       - Health
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthCheck'
+ *             example:
+ *               status: "OK"
+ *               timestamp: "2024-01-15T10:30:00.000Z"
+ *               uptime: 3600
+ */
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -56,6 +77,10 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Setup Swagger documentation
+const { setupSwagger } = require('./swagger');
+setupSwagger(app, PORT);
 
 // API routes
 app.use('/api/v1', require('./routes'));
