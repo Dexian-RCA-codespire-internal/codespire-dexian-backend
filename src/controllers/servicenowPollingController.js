@@ -26,6 +26,31 @@ const getPollingStatus = async (req, res) => {
 };
 
 /**
+ * Perform ServiceNow health check
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const performHealthCheck = async (req, res) => {
+  try {
+    console.log('🔍 Manual health check triggered via API');
+    const healthCheck = await pollingService.performHealthCheckAndEmit();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Health check completed',
+      data: healthCheck
+    });
+  } catch (error) {
+    console.error('Error performing health check:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to perform health check',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Start the polling service
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -142,6 +167,7 @@ const resetPollingState = async (req, res) => {
 
 module.exports = {
   getPollingStatus,
+  performHealthCheck,
   startPolling,
   stopPolling,
   triggerManualPoll,

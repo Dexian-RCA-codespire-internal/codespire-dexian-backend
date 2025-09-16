@@ -2,6 +2,7 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const { webSocketService } = require('./websocketService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
 
@@ -248,6 +249,8 @@ const fetchTicketsAndSave = async (options = {}) => {
             savedTicket = await newTicket.save();
             savedCount++;
             isNewTicket = true;
+            // Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
             console.log(`✅ Created new ticket: ${ticketData.number}`);
           } catch (saveError) {
             console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
@@ -262,6 +265,8 @@ const fetchTicketsAndSave = async (options = {}) => {
               { new: true, maxTimeMS: 10000 }
             );
             updatedCount++;
+            // Emit WebSocket event for updated ticket
+          webSocketService.emitUpdatedTicket(savedTicket.toObject());
             console.log(`✅ Updated existing ticket: ${ticketData.number}`);
           } catch (updateError) {
             console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
@@ -451,35 +456,25 @@ const bulkImportAllTickets = async (options = {}) => {
         let isNewTicket = false;
         
         if (!existingTicket) {
-          // Create new ticket with timeout handling
+          // Create new ticket
           try {
-            const newTicket = new Ticket(ticketDoc);
-            savedTicket = await newTicket.save();
-            savedCount++;
-            isNewTicket = true;
-          } catch (saveError) {
-            console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
-            throw saveError;
-          }
-        } else {
-          // Update existing ticket with timeout handling
-          try {
-            savedTicket = await Ticket.findOneAndUpdate(
-              { ticket_id: ticketData.number, source: 'ServiceNow' },
-              ticketDoc,
-              { new: true, maxTimeMS: 10000 }
-            );
-            updatedCount++;
-          } catch (updateError) {
-            console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
-            throw updateError;
-          }
+          const newTicket = new Ticket(ticketDoc);
+          savedTicket = await newTicket.save();
+          savedCount++;
+          isNewTicket = true;// Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
+        } catch (saveError) {
+          console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
+          throw saveError;
         }
-
-        // Prepare for batch vectorization ONLY for new tickets
-        if (isNewTicket) {
-          ticketsForVectorization.push(ticketDoc);
-          mongoIdsForVectorization.push(savedTicket._id);
+        } else {
+          // Update existing ticket
+          await Ticket.findOneAndUpdate(
+            { ticket_id: ticketData.number, source: 'ServiceNow' },
+            ticketDoc,
+            { new: true }
+          );
+          updatedCount++;
         }
 
       } catch (error) {
