@@ -23,13 +23,6 @@ const validateSimilarTicketsRequest = [
         .isLength({ min: 5, max: 500 })
         .withMessage('Short description must be between 5 and 500 characters'),
     
-    body('description')
-        .notEmpty()
-        .withMessage('Description is required')
-        .isString()
-        .withMessage('Description must be a string')
-        .isLength({ min: 10, max: 5000 })
-        .withMessage('Description must be between 10 and 5000 characters'),
     
     body('category')
         .notEmpty()
@@ -69,11 +62,6 @@ const validateTicketSuggestionsRequest = [
         .isString()
         .withMessage('Short description must be a string'),
     
-    body('similarTickets.*.description')
-        .notEmpty()
-        .withMessage('Each ticket must have a description')
-        .isString()
-        .withMessage('Description must be a string'),
     
     body('similarTickets.*.category')
         .notEmpty()
@@ -100,11 +88,7 @@ const validateTicketSuggestionsRequest = [
         .optional()
         .isString()
         .withMessage('Current ticket short description must be a string'),
-    
-    body('currentTicket.description')
-        .optional()
-        .isString()
-        .withMessage('Current ticket description must be a string'),
+
     
     body('currentTicket.category')
         .optional()
