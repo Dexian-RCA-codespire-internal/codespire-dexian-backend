@@ -5,7 +5,8 @@
 
 const express = require('express');
 const ticketController = require('../controllers/ticketSimilarityController');
-const { validateSimilarTicketsRequest } = require('../validators/ticketSimilarityValidators');
+
+const { validateSimilarTicketsRequest, validateTicketSuggestionsRequest } = require('../validators/ticketSimilarityValidators');
 const { doc } = require('../utils/apiDoc');
 
 const router = express.Router();
@@ -16,6 +17,13 @@ router.post('/similar',
   ticketController.findSimilarTickets
 );
 
+router.post('/suggestions',
+  validateTicketSuggestionsRequest,
+  ticketController.generateTicketSuggestions
+);
+
+// GET /api/tickets/similarity/health - Health check for the ticket similarity service
+router.get('/similarity/health', ticketController.checkHealth);
 router.get('/similarity/health', 
   doc.get('/ticket-similarity/similarity/health', 'Check health status of AI similarity search service', ['AI Services', 'Health']),
   ticketController.checkHealth);
