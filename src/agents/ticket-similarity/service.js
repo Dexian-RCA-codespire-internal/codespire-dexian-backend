@@ -181,6 +181,7 @@ class TicketSimilarityService {
         }, `Processed ${results.length} tickets in batch`);
     }
 
+
     /**
      * Validate ticket input
      */
