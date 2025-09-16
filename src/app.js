@@ -26,6 +26,9 @@ const config = require('./config');
 
 const app = express();
 
+// Create HTTP server
+const server = http.createServer(app);
+
 const PORT = process.env.PORT || 8081;
 
 // Middleware
@@ -76,6 +79,28 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+// Debug endpoint for ServiceNow polling status
+app.get('/debug/polling', async (req, res) => {
+  try {
+    const status = await pollingService.getStatus();
+    res.json({
+      success: true,
+      config: {
+        enablePolling: config.servicenow.enablePolling,
+        pollingInterval: config.servicenow.pollingInterval,
+        servicenowUrl: config.servicenow.url ? 'Set' : 'Not set',
+        servicenowUsername: config.servicenow.username ? 'Set' : 'Not set'
+      },
+      pollingStatus: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Setup Swagger documentation
@@ -224,10 +249,20 @@ server.listen(PORT, async () => {
     console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
   }
   
+  // Debug: Log ServiceNow configuration
+  console.log('🔧 ServiceNow Configuration:');
+  console.log(`   - enablePolling: ${config.servicenow.enablePolling}`);
+  console.log(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
+  console.log(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
+  console.log(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
+  console.log(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
+  
   // Initialize ServiceNow polling service if enabled
   if (config.servicenow.enablePolling) {
     try {
+      console.log('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
+      console.log('✅ ServiceNow polling service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize ServiceNow polling service:', error);
     }
