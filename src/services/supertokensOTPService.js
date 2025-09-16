@@ -326,7 +326,7 @@ class SuperTokensOTPService {
       await user.save();
 
       // Create magic link URL pointing to backend verification endpoint
-      const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/api/v1/auth/verify-magic-link/${magicLinkToken}`;
+      const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/v1/auth/verify-magic-link/${magicLinkToken}`;
 
       // Send magic link email using custom email service
       const emailResult = await emailService.sendMagicLinkEmail(user.email, user.name, magicLinkUrl);
