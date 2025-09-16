@@ -310,6 +310,11 @@ server.listen(PORT, async () => {
       console.log('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
       console.log('✅ ServiceNow polling service initialized successfully');
+      
+      // Reset polling status to healthy on server startup
+      console.log('🔄 Resetting polling status to healthy on startup...');
+      await pollingService.resetPollingStatus();
+      console.log('✅ Polling status reset to healthy');
     } catch (error) {
       console.error('❌ Failed to initialize ServiceNow polling service:', error);
     }

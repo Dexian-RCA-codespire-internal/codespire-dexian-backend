@@ -13,8 +13,10 @@ const PollingStateSchema = new mongoose.Schema({
   totalPolls: { type: Number, default: 0 },
   successfulPolls: { type: Number, default: 0 },
   failedPolls: { type: Number, default: 0 },
+  consecutiveFailures: { type: Number, default: 0 },
   lastError: { type: String },
-  isActive: { type: Boolean, default: true }
+  isActive: { type: Boolean, default: true },
+  isHealthy: { type: Boolean, default: true }
 }, {
   timestamps: true,
   collection: 'polling_states'
@@ -110,6 +112,45 @@ class ServiceNowPollingService {
   }
 
   /**
+   * Validate ServiceNow credentials
+   */
+  async validateCredentials() {
+    // Check if credentials are configured
+    if (!config.servicenow.url || !config.servicenow.username || !config.servicenow.password) {
+      throw new Error('ServiceNow credentials not configured');
+    }
+    
+    // Test connection with a simple API call
+    try {
+      const axios = require('axios');
+      const testClient = axios.create({
+        baseURL: config.servicenow.url,
+        auth: {
+          username: config.servicenow.username,
+          password: config.servicenow.password
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 10000 // 10 second timeout for credential test
+      });
+      
+      // Make a simple test call
+      await testClient.get('/api/now/table/incident?sysparm_limit=1');
+      return true;
+    } catch (error) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        throw new Error('Invalid ServiceNow credentials');
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        throw new Error('Cannot connect to ServiceNow instance');
+      } else {
+        throw new Error(`ServiceNow connection failed: ${error.message}`);
+      }
+    }
+  }
+
+  /**
    * Perform a single poll operation
    */
   async performPoll() {
@@ -122,8 +163,28 @@ class ServiceNowPollingService {
       const pollingState = await PollingState.findOne({ service: 'servicenow' });
       if (!pollingState || !pollingState.isActive) {
         console.log('⚠️ Polling is disabled or state not found');
+        // Emit polling status even when disabled
+        webSocketService.emitPollingStatus({
+          timestamp: new Date(),
+          status: 'disabled',
+          isActive: false,
+          isHealthy: false,
+          error: 'Polling is disabled'
+        });
         return;
       }
+
+      // Emit polling started event
+      webSocketService.emitPollingStatus({
+        timestamp: new Date(),
+        status: 'polling',
+        isActive: true,
+        isHealthy: pollingState?.isHealthy ?? true,
+        message: 'Polling started'
+      });
+
+      // Validate credentials before attempting poll
+      await this.validateCredentials();
 
       // Update total polls count
       await PollingState.updateOne(
@@ -162,7 +223,10 @@ class ServiceNowPollingService {
             $set: {
               lastSyncTime: currentTime,
               lastSuccessfulPoll: currentTime,
-              lastError: null
+              lastError: null,
+              consecutiveFailures: 0,
+              isHealthy: true,
+              isActive: true
             },
             $inc: { successfulPolls: 1 }
           }
@@ -176,23 +240,23 @@ class ServiceNowPollingService {
           timestamp: currentTime
         });
 
-        // Emit WebSocket events for real-time updates
-        if (newTicketsCount > 0 || updatedTicketsCount > 0) {
-          webSocketService.emitPollingStatus({
-            newTickets: newTicketsCount,
-            updatedTickets: updatedTicketsCount,
-            totalProcessed: result.total,
-            timestamp: currentTime,
-            status: 'success'
-          });
+        // Emit polling completed event (always emit, regardless of ticket count)
+        webSocketService.emitPollingStatus({
+          timestamp: new Date(),
+          status: 'completed',
+          isActive: true,
+          isHealthy: true,
+          message: `Poll completed - ${newTicketsCount} new, ${updatedTicketsCount} updated`,
+          newTickets: newTicketsCount,
+          updatedTickets: updatedTicketsCount
+        });
 
-          // Emit notification for new tickets
-          if (newTicketsCount > 0) {
-            webSocketService.emitNotification(
-              `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
-              'success'
-            );
-          }
+        // Emit notification for new tickets
+        if (newTicketsCount > 0) {
+          webSocketService.emitNotification(
+            `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
+            'success'
+          );
         }
 
       } else {
@@ -202,11 +266,20 @@ class ServiceNowPollingService {
     } catch (error) {
       console.error('❌ Polling failed:', error.message);
       
-      // Update polling state with error
+      // Update polling state with error and track consecutive failures
+      const pollingState = await PollingState.findOne({ service: 'servicenow' });
+      const consecutiveFailures = (pollingState?.consecutiveFailures || 0) + 1;
+      const isHealthy = consecutiveFailures < 1; // Disconnect after 1 failure
+      
       await PollingState.updateOne(
         { service: 'servicenow' },
         {
-          $set: { lastError: error.message },
+          $set: { 
+            lastError: error.message,
+            consecutiveFailures: consecutiveFailures,
+            isHealthy: isHealthy,
+            isActive: isHealthy // Disable polling if unhealthy
+          },
           $inc: { failedPolls: 1 }
         }
       );
@@ -221,13 +294,13 @@ class ServiceNowPollingService {
       webSocketService.emitPollingStatus({
         error: error.message,
         timestamp: new Date(),
-        status: 'error'
+        status: isHealthy ? 'warning' : 'error',
+        consecutiveFailures: consecutiveFailures,
+        isHealthy: isHealthy,
+        isActive: isHealthy,
+        message: `Poll failed: ${error.message}`
       });
 
-      webSocketService.emitNotification(
-        `ServiceNow polling error: ${error.message}`,
-        'error'
-      );
 
       // Implement retry logic if needed
       await this.handlePollingError(error);
@@ -239,16 +312,31 @@ class ServiceNowPollingService {
    */
   async handlePollingError(error) {
     const pollingState = await PollingState.findOne({ service: 'servicenow' });
-    const consecutiveFailures = pollingState?.failedPolls || 0;
+    const consecutiveFailures = pollingState?.consecutiveFailures || 0;
 
-    if (consecutiveFailures >= this.maxRetries) {
-      console.error(`🚨 Maximum retry attempts (${this.maxRetries}) reached. Disabling polling.`);
+    if (consecutiveFailures >= 1) {
+      console.error(`🚨 ServiceNow polling failed. Marking as disconnected.`);
       
-      // Disable polling after max retries
+      // Mark as disconnected after 1 failure
       await PollingState.updateOne(
         { service: 'servicenow' },
-        { $set: { isActive: false } }
+        { 
+          $set: { 
+            isActive: false,
+            isHealthy: false
+          }
+        }
       );
+      
+      // Emit WebSocket status update for frontend
+      webSocketService.emitPollingStatus({
+        error: error.message,
+        timestamp: new Date(),
+        status: 'error',
+        consecutiveFailures: consecutiveFailures,
+        isHealthy: false,
+        isActive: false
+      });
       
       // You might want to send an alert here
       this.emitPollingEvent('max_retries_reached', {
@@ -275,6 +363,40 @@ class ServiceNowPollingService {
   }
 
   /**
+   * Reset polling status to healthy (used on server startup)
+   */
+  async resetPollingStatus() {
+    try {
+      await PollingState.updateOne(
+        { service: 'servicenow' },
+        {
+          $set: {
+            isActive: true,
+            isHealthy: true,
+            consecutiveFailures: 0,
+            lastError: null
+          }
+        },
+        { upsert: true }
+      );
+      
+      // Emit WebSocket status update
+      webSocketService.emitPollingStatus({
+        timestamp: new Date(),
+        status: 'reset',
+        isActive: true,
+        isHealthy: true,
+        message: 'Polling status reset to healthy on server startup'
+      });
+      
+      console.log('✅ Polling status reset to healthy');
+    } catch (error) {
+      console.error('❌ Failed to reset polling status:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get polling status
    */
   async getStatus() {
@@ -283,11 +405,13 @@ class ServiceNowPollingService {
     return {
       isRunning: this.isRunning,
       isActive: pollingState?.isActive || false,
+      isHealthy: pollingState?.isHealthy ?? true,
       lastSyncTime: pollingState?.lastSyncTime,
       lastSuccessfulPoll: pollingState?.lastSuccessfulPoll,
       totalPolls: pollingState?.totalPolls || 0,
       successfulPolls: pollingState?.successfulPolls || 0,
       failedPolls: pollingState?.failedPolls || 0,
+      consecutiveFailures: pollingState?.consecutiveFailures || 0,
       lastError: pollingState?.lastError,
       pollingInterval: this.pollingInterval
     };
