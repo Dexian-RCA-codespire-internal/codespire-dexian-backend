@@ -4,6 +4,7 @@
  */
 
 const mongoose = require('mongoose');
+const { servicenow } = require('../constants');
 
 const RCAResolvedSchema = new mongoose.Schema({
     // Ticket identification
@@ -24,7 +25,17 @@ const RCAResolvedSchema = new mongoose.Schema({
     
     // Resolution data
     root_cause: { type: String, required: true },
-    close_code: { type: String, required: true },
+    close_code: { 
+        type: String, 
+        required: true,
+        enum: servicenow.CLOSE_CODE_LIST,
+        validate: {
+            validator: function(v) {
+                return servicenow.isValidCloseCode(v);
+            },
+            message: 'Invalid close code. Valid codes are: ' + servicenow.CLOSE_CODE_LIST.join(', ')
+        }
+    },
     customer_summary: { type: String, required: true },
     problem_statement: { type: String },
     resolution_analysis: { type: String },

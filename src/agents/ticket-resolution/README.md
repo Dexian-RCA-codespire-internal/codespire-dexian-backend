@@ -58,7 +58,7 @@ Resolves a ticket with root cause analysis and updates ServiceNow.
   "data": {
     "resolution": {
       "rootCause": "The user was experiencing network connectivity issues...",
-      "closeCode": "Solution provided",
+      "closeCode": "Solution provided", // From servicenow.CLOSE_CODES.SOLUTION_PROVIDED
       "customerSummary": "Network connectivity issue resolved by updating DNS server configuration.",
       "problemStatement": "Issue: check refactored code - updated\nDescription: added later\nCategory: Inquiry / Help",
       "analysis": "This appears to be a technical issue that was resolved by providing a solution."
@@ -176,7 +176,7 @@ curl --location --request PATCH 'https://dev283514.service-now.com/api/now/table
 --header 'Cookie: glide_user_route=glide.24bdc8acfe46e25d4cede16391cb7676' \
 --data '{
     "state": "6", 
-    "close_code": "Solution provided",
+    "close_code": "Solution provided", // Use constants from src/constants/servicenow.js
     "close_notes": "Network connectivity issue resolved by updating DNS server configuration."
 }'
 ```

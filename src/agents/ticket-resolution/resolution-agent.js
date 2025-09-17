@@ -6,6 +6,7 @@
 const { providers, utils } = require('../shared');
 const llmProvider = providers.llm;
 const config = require('./config');
+const { servicenow } = require('../../constants');
 
 class TicketResolutionAgent {
     constructor() {
@@ -110,16 +111,7 @@ ROOT CAUSE:
 ${rootCause}
 
 AVAILABLE CLOSE CODES:
-- "Duplicate": Issue is a duplicate of another ticket
-- "Known error": Issue is a known problem with existing documentation
-- "No resolution provided": No solution was found or provided
-- "Resolved by caller": Issue was resolved by the caller themselves
-- "Resolved by change": Issue was resolved by implementing a change
-- "Resolved by problem": Issue was resolved by fixing an underlying problem
-- "Resolved by request": Issue was resolved by fulfilling a request
-- "Solution provided": A solution was provided to resolve the issue
-- "Workaround provided": A workaround was provided to resolve the issue
-- "User error": Issue was caused by user error
+${servicenow.getAllCloseCodesWithDescriptions().map(item => `- "${item.code}": ${item.description}`).join('\n')}
 
 Please provide your analysis in the following JSON format:
 {

@@ -6,6 +6,7 @@
 const axios = require('axios');
 const config = require('../config');
 const RCAResolved = require('../models/RCAResolved');
+const { servicenow } = require('../constants');
 
 class ServiceNowResolutionService {
     constructor() {
@@ -25,6 +26,11 @@ class ServiceNowResolutionService {
     async updateTicketResolution(sysId, resolutionData) {
         try {
             console.log(`🔄 Updating ServiceNow ticket resolution for sys_id: ${sysId}`);
+            
+            // Validate close code
+            if (!servicenow.isValidCloseCode(resolutionData.closeCode)) {
+                throw new Error(`Invalid close code: ${resolutionData.closeCode}. Valid codes are: ${servicenow.CLOSE_CODE_LIST.join(', ')}`);
+            }
             
             const url = `${this.baseURL}/api/now/table/incident/${sysId}`;
             
