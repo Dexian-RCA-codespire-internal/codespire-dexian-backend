@@ -17,7 +17,7 @@ class WebSocketService {
     this.io = new Server(server, {
       cors: {
         origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-          'http://localhost:3001',
+          process.env.FRONTEND_URL || 'http://localhost:3001',
         ],
         methods: ['GET', 'POST'],
         credentials: true

@@ -17,8 +17,8 @@ const config = {
     connectionURI: process.env.SUPERTOKENS_CONNECTION_URI || 'http://localhost:3567',
     apiKey: process.env.SUPERTOKENS_API_KEY,
     appName: process.env.SUPERTOKENS_APP_NAME || 'your-app-name',
-    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3000',
-    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:3000'
+    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3001',
+    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:3001'
   },
 
   
@@ -103,7 +103,9 @@ const config = {
       enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
       // Bulk import configuration
       enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
-      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100,
+      // Health check configuration
+      healthCheckIntervalSeconds: parseInt(process.env.SERVICENOW_HEALTH_CHECK_INTERVAL_SECONDS) || 10
     },
 
       // Output configuration
