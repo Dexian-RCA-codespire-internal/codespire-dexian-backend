@@ -5,10 +5,11 @@ const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
 const config = require('./index');
 const emailService = require('../services/emailService');
+const logger = require('../utils/logger');
 
 // Initialize SuperTokens
 const initSuperTokens = () => {
-  console.log('🔧 Initializing SuperTokens...');
+  logger.info('🔧 Initializing SuperTokens...');
   supertokens.init({
     framework: 'express',
     supertokens: {
@@ -27,9 +28,9 @@ const initSuperTokens = () => {
           service: {
             sendEmail: async (input) => {
               try {
-                console.log('📧 SuperTokens email delivery called');
-                console.log('📧 Full input object keys:', Object.keys(input));
-                console.log('📧 Input details:', {
+                logger.info('📧 SuperTokens email delivery called');
+                logger.info('📧 Full input object keys:', Object.keys(input));
+                logger.info('📧 Input details:', {
                   email: input.email,
                   hasUserInputCode: !!input.userInputCode,
                   hasUrlWithLinkCode: !!input.urlWithLinkCode,
@@ -42,8 +43,8 @@ const initSuperTokens = () => {
                 
                 // Force magic link instead of OTP
                 if (urlWithLinkCode) {
-                  console.log('📧 Sending magic link email to:', email);
-                  console.log('📧 Magic link URL:', urlWithLinkCode);
+                  logger.info('📧 Sending magic link email to:', email);
+                  logger.info('📧 Magic link URL:', urlWithLinkCode);
                   // Send magic link email
                   const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
                   
@@ -52,9 +53,9 @@ const initSuperTokens = () => {
                     throw new Error(`Failed to send magic link email: ${result.error}`);
                   }
                   
-                  console.log('✅ SuperTokens magic link email sent successfully');
+                  logger.info('✅ SuperTokens magic link email sent successfully');
                 } else if (userInputCode) {
-                  console.log('📧 OTP received but we want magic links. Generating magic link for:', email);
+                  logger.info('📧 OTP received but we want magic links. Generating magic link for:', email);
                   // Generate a proper magic link using SuperTokens
                   try {
                     const EmailVerification = require('supertokens-node/recipe/emailverification');
@@ -68,7 +69,7 @@ const initSuperTokens = () => {
                       
                       if (tokenRes.status === "OK") {
                         const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
-                        console.log('📧 Generated proper magic link URL:', magicLinkUrl);
+                        logger.info('📧 Generated proper magic link URL:', magicLinkUrl);
                         
                         const result = await emailService.sendMagicLinkEmail(email, email, magicLinkUrl);
                         
@@ -77,7 +78,7 @@ const initSuperTokens = () => {
                           throw new Error(`Failed to send magic link email: ${result.error}`);
                         }
                         
-                        console.log('✅ SuperTokens magic link email sent successfully (generated from OTP)');
+                        logger.info('✅ SuperTokens magic link email sent successfully (generated from OTP)');
                       } else {
                         console.error('❌ Failed to create email verification token');
                         throw new Error('Failed to create email verification token');
@@ -91,13 +92,13 @@ const initSuperTokens = () => {
                     throw error;
                   }
                 } else {
-                  console.log('⚠️ No userInputCode or urlWithLinkCode provided');
-                  console.log('📧 Attempting to extract email from user object or other fields');
+                  logger.info('⚠️ No userInputCode or urlWithLinkCode provided');
+                  logger.info('📧 Attempting to extract email from user object or other fields');
                   
                   // Try to get email from user object or other fields
                   const userEmail = input.user?.email || input.email || input.user?.id;
                   if (userEmail) {
-                    console.log('📧 Found email in user object:', userEmail);
+                    logger.info('📧 Found email in user object:', userEmail);
                     // Generate a magic link for this user
                     try {
                       const EmailVerification = require('supertokens-node/recipe/emailverification');
@@ -110,7 +111,7 @@ const initSuperTokens = () => {
                         
                         if (tokenRes.status === "OK") {
                           const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
-                          console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
+                          logger.info('📧 Generated magic link URL from user object:', magicLinkUrl);
                           
                           const result = await emailService.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
                           
@@ -119,7 +120,7 @@ const initSuperTokens = () => {
                             throw new Error(`Failed to send magic link email: ${result.error}`);
                           }
                           
-                          console.log('✅ SuperTokens magic link email sent successfully (from user object)');
+                          logger.info('✅ SuperTokens magic link email sent successfully (from user object)');
                         } else {
                           console.error('❌ Failed to create email verification token from user object');
                         }
@@ -216,7 +217,7 @@ const initSuperTokens = () => {
                     try {
                       const otpResult = await SuperTokensOTPService.sendOTP(email);
                       if (otpResult.success) {
-                        console.log('✅ OTP sent during SuperTokens signup');
+                        logger.info('✅ OTP sent during SuperTokens signup');
                       } else {
                         console.error('Failed to send OTP during SuperTokens signup:', otpResult.error);
                       }
@@ -224,7 +225,7 @@ const initSuperTokens = () => {
                       console.error('Error sending OTP during SuperTokens signup:', otpError);
                     }
                     
-                    console.log('✅ User created in database via SuperTokens signup');
+                    logger.info('✅ User created in database via SuperTokens signup');
                   } catch (error) {
                     console.error('❌ Error creating user in database via SuperTokens signup:', error);
                     // Don't fail the signup if database creation fails
@@ -245,7 +246,7 @@ const initSuperTokens = () => {
       UserMetadata.init(),
     ],
   });
-  console.log('✅ SuperTokens configuration completed');
+  logger.info('✅ SuperTokens configuration completed');
 };
 
 module.exports = {

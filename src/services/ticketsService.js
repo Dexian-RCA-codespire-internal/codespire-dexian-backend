@@ -1,5 +1,6 @@
 // new file servicenow
 const Ticket = require('../models/Tickets');
+const logger = require('../utils/logger');
 
 /**
  * Fetch tickets from MongoDB database
@@ -8,7 +9,7 @@ const Ticket = require('../models/Tickets');
  */
 const fetchTicketsFromDB = async (options = {}) => {
   try {
-    console.log('📥 Fetching tickets from MongoDB...');
+    logger.info('📥 Fetching tickets from MongoDB...');
     
     const {
       limit = 10,
@@ -69,9 +70,9 @@ const fetchTicketsFromDB = async (options = {}) => {
     const sort = {};
     sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    console.log(`🔧 Query filter:`, JSON.stringify(filter, null, 2));
-    console.log(`🔧 Sort:`, JSON.stringify(sort, null, 2));
-    console.log(`🔧 Limit: ${limit}, Offset: ${calculatedOffset}`);
+    logger.info(`🔧 Query filter: ${JSON.stringify(filter, null, 0)}`);
+    logger.info(`🔧 Sort: ${JSON.stringify(sort, null, 0)}`);
+    logger.info(`🔧 Limit: ${limit}, Offset: ${calculatedOffset}`);
 
     // Execute query with pagination
     const tickets = await Ticket.find(filter)
@@ -89,7 +90,7 @@ const fetchTicketsFromDB = async (options = {}) => {
     const hasNextPage = currentPage < totalPages;
     const hasPrevPage = currentPage > 1;
 
-    console.log(`✅ Found ${tickets.length} tickets (Total: ${totalCount})`);
+    logger.info(`✅ Found ${tickets.length} tickets (Total: ${totalCount})`);
 
     return {
       success: true,
@@ -125,7 +126,7 @@ const fetchTicketsFromDB = async (options = {}) => {
  */
 const getTicketById = async (ticketId, source = 'ServiceNow') => {
   try {
-    console.log(`📥 Fetching ticket ${ticketId} from MongoDB...`);
+    logger.info(`📥 Fetching ticket ${ticketId} from MongoDB...`);
     
     let ticket = await Ticket.findOne({ 
       ticket_id: ticketId, 
@@ -143,7 +144,7 @@ const getTicketById = async (ticketId, source = 'ServiceNow') => {
       };
     }
 
-    console.log(`✅ Found ticket: ${ticket.ticket_id}`);
+    logger.info(`✅ Found ticket: ${ticket.ticket_id}`);
 
     return {
       success: true,
@@ -168,7 +169,7 @@ const getTicketById = async (ticketId, source = 'ServiceNow') => {
  */
 const getTicketStats = async (source = 'ServiceNow') => {
   try {
-    console.log('📊 Calculating ticket statistics...');
+    logger.info('📊 Calculating ticket statistics...');
     
     // Use simple count queries instead of complex aggregation
     const total = await Ticket.countDocuments({ source: source });
@@ -258,7 +259,7 @@ const getTicketStats = async (source = 'ServiceNow') => {
       };
     });
 
-    console.log(`✅ Statistics calculated: ${total} total tickets (${open} open, ${closed} closed)`);
+    logger.info(`✅ Statistics calculated: ${total} total tickets (${open} open, ${closed} closed)`);
 
     return {
       success: true,

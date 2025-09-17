@@ -5,6 +5,7 @@ const Ticket = require('../models/Tickets');
 const { webSocketService } = require('./websocketService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
+const logger = require('../utils/logger');
 
 // Bulk Import State Schema
 const bulkImportStateSchema = new mongoose.Schema({
@@ -46,7 +47,7 @@ const markBulkImportCompleted = async (totalTicketsImported) => {
       },
       { upsert: true, new: true }
     );
-    console.log('✅ Bulk import state marked as completed');
+    logger.info('✅ Bulk import state marked as completed');
   } catch (error) {
     console.error('❌ Error marking bulk import as completed:', error.message);
   }
@@ -67,7 +68,7 @@ const resetBulkImportState = async () => {
       },
       { upsert: true, new: true }
     );
-    console.log('🔄 Bulk import state reset');
+    logger.info('Bulk import state reset');
   } catch (error) {
     console.error('❌ Error resetting bulk import state:', error.message);
   }
@@ -118,7 +119,7 @@ const apiClient = createApiClient();
  */
 const fetchTicketsAndSave = async (options = {}) => {
   try {
-    console.log('📥 Fetching tickets from ServiceNow for polling...');
+    logger.info('📥 Fetching tickets from ServiceNow for polling...');
     
     const {
       limit = 10,
@@ -133,7 +134,7 @@ const fetchTicketsAndSave = async (options = {}) => {
       Math.min(limit, config.output.maxRecords) : 
       limit;
     
-    console.log(`🔧 Requested limit: ${limit}, Effective limit: ${effectiveLimit}`);
+    logger.info(`Requested limit: ${limit}, Effective limit: ${effectiveLimit}`);
 
     let allTickets = [];
     let currentOffset = offset;
@@ -144,7 +145,7 @@ const fetchTicketsAndSave = async (options = {}) => {
       const remainingRecords = effectiveLimit - totalFetched;
       const currentLimit = Math.min(limit, remainingRecords);
       
-      console.log(`📄 Fetching records ${currentOffset + 1} to ${currentOffset + currentLimit}...`);
+      logger.info(`Fetching records ${currentOffset + 1} to ${currentOffset + currentLimit}...`);
       
       const params = {
         sysparm_limit: currentLimit,
@@ -161,7 +162,7 @@ const fetchTicketsAndSave = async (options = {}) => {
         allTickets = allTickets.concat(tickets);
         totalFetched += tickets.length;
         
-        console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
+        logger.info(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
         
         // Check if we have more records
         hasMore = tickets.length === currentLimit && totalFetched < effectiveLimit;
@@ -172,16 +173,16 @@ const fetchTicketsAndSave = async (options = {}) => {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       } else {
-        console.log('⚠️ No more tickets found or API returned unexpected response');
+        logger.info('⚠️ No more tickets found or API returned unexpected response');
         hasMore = false;
       }
     }
 
-    console.log(`📊 Total tickets fetched: ${allTickets.length}`);
+    logger.info(`📊 Total tickets fetched: ${allTickets.length}`);
     
     // Check if no data was returned
     if (allTickets.length === 0) {
-      console.log('⚠️ No tickets found in ServiceNow for polling');
+      logger.info('⚠️ No tickets found in ServiceNow for polling');
       return {
         success: true,
         message: 'No tickets found',
@@ -196,7 +197,7 @@ const fetchTicketsAndSave = async (options = {}) => {
     }
 
     // Save tickets to database
-    console.log('💾 Saving tickets to database...');
+    logger.info('💾 Saving tickets to database...');
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
@@ -251,7 +252,7 @@ const fetchTicketsAndSave = async (options = {}) => {
             isNewTicket = true;
             // Emit WebSocket event for new ticket
           webSocketService.emitNewTicket(newTicket.toObject());
-            console.log(`✅ Created new ticket: ${ticketData.number}`);
+            logger.info(`✅ Created new ticket: ${ticketData.number}`);
           } catch (saveError) {
             console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
             throw saveError;
@@ -267,7 +268,7 @@ const fetchTicketsAndSave = async (options = {}) => {
             updatedCount++;
             // Emit WebSocket event for updated ticket
           webSocketService.emitUpdatedTicket(savedTicket.toObject());
-            console.log(`✅ Updated existing ticket: ${ticketData.number}`);
+            logger.info(`✅ Updated existing ticket: ${ticketData.number}`);
           } catch (updateError) {
             console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
             throw updateError;
@@ -281,7 +282,7 @@ const fetchTicketsAndSave = async (options = {}) => {
             if (vectorResult.success) {
               vectorizedCount++;
             } else {
-              console.log(`⚠️ Failed to vectorize ticket ${ticketData.number}: ${vectorResult.reason || vectorResult.error}`);
+              logger.info(`⚠️ Failed to vectorize ticket ${ticketData.number}: ${vectorResult.reason || vectorResult.error}`);
             }
           } catch (vectorError) {
             console.error(`❌ Error vectorizing ticket ${ticketData.number}:`, vectorError.message);
@@ -294,11 +295,11 @@ const fetchTicketsAndSave = async (options = {}) => {
       }
     }
 
-    console.log(`✅ Database operations completed:`);
-    console.log(`   - New tickets saved: ${savedCount}`);
-    console.log(`   - Existing tickets updated: ${updatedCount}`);
-    console.log(`   - Vectorized in Qdrant: ${vectorizedCount}`);
-    console.log(`   - Errors: ${errorCount}`);
+    logger.info(`✅ Database operations completed:`);
+    logger.info(`   - New tickets saved: ${savedCount}`);
+    logger.info(`   - Existing tickets updated: ${updatedCount}`);
+    logger.info(`   - Vectorized in Qdrant: ${vectorizedCount}`);
+    logger.info(`   - Errors: ${errorCount}`);
     
     return {
       success: true,
@@ -342,7 +343,7 @@ const bulkImportAllTickets = async (options = {}) => {
     // Check if bulk import has already been completed
     const alreadyCompleted = await hasCompletedBulkImport();
     if (alreadyCompleted && !options.force) {
-      console.log('ℹ️ Bulk import already completed. Use force=true to re-import.');
+      logger.info('ℹ️ Bulk import already completed. Use force=true to re-import.');
       const status = await getBulkImportStatus();
       return {
         success: true,
@@ -352,7 +353,7 @@ const bulkImportAllTickets = async (options = {}) => {
       };
     }
 
-    console.log('🚀 Starting bulk import of ALL tickets from ServiceNow...');
+    logger.info('Starting bulk import of ALL tickets from ServiceNow...');
     
     const {
       query = '',
@@ -365,12 +366,12 @@ const bulkImportAllTickets = async (options = {}) => {
     let hasMore = true;
     let totalFetched = 0;
 
-    console.log(`🔧 Bulk import settings:`);
-    console.log(`   - Batch size: ${batchSize}`);
-    console.log(`   - Query filter: ${query || 'None (all tickets)'}`);
+    logger.info(`Bulk import settings:`);
+    logger.info(`   - Batch size: ${batchSize}`);
+    logger.info(`   - Query filter: ${query || 'None (all tickets)'}`);
 
     while (hasMore) {
-      console.log(`📄 Fetching batch ${Math.floor(offset / batchSize) + 1} (records ${offset + 1} to ${offset + batchSize})...`);
+      logger.info(`Fetching batch ${Math.floor(offset / batchSize) + 1} (records ${offset + 1} to ${offset + batchSize})...`);
       
       const params = {
         sysparm_limit: batchSize,
@@ -387,7 +388,7 @@ const bulkImportAllTickets = async (options = {}) => {
         allTickets = allTickets.concat(tickets);
         totalFetched += tickets.length;
         
-        console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
+        logger.info(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
         
         // Check if we have more records
         hasMore = tickets.length === batchSize;
@@ -398,15 +399,15 @@ const bulkImportAllTickets = async (options = {}) => {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
       } else {
-        console.log('⚠️ No more tickets found or API returned unexpected response');
+        logger.info('⚠️ No more tickets found or API returned unexpected response');
         hasMore = false;
       }
     }
 
-    console.log(`📊 Bulk import completed: ${allTickets.length} tickets fetched from ServiceNow`);
+    logger.info(`📊 Bulk import completed: ${allTickets.length} tickets fetched from ServiceNow`);
 
     // Save all tickets to database
-    console.log('💾 Saving all tickets to database...');
+    logger.info('💾 Saving all tickets to database...');
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
@@ -485,24 +486,24 @@ const bulkImportAllTickets = async (options = {}) => {
 
     // Batch vectorize all tickets
     if (ticketsForVectorization.length > 0) {
-      console.log('🔄 Vectorizing tickets for similarity search...');
+      logger.info('Vectorizing tickets for similarity search...');
       try {
         const vectorResults = await ticketVectorizationService.vectorizeAndStoreTicketsBatch(
           ticketsForVectorization, 
           mongoIdsForVectorization
         );
         vectorizedCount = vectorResults.successful;
-        console.log(`✅ Vectorization completed: ${vectorResults.successful} successful, ${vectorResults.failed} failed`);
+        logger.info(`✅ Vectorization completed: ${vectorResults.successful} successful, ${vectorResults.failed} failed`);
       } catch (vectorError) {
         console.error('❌ Error in batch vectorization:', vectorError.message);
       }
     }
 
-    console.log(`✅ Bulk import database operations completed:`);
-    console.log(`   - New tickets saved: ${savedCount}`);
-    console.log(`   - Existing tickets updated: ${updatedCount}`);
-    console.log(`   - Vectorized in Qdrant: ${vectorizedCount}`);
-    console.log(`   - Errors: ${errorCount}`);
+    logger.info(`✅ Bulk import database operations completed:`);
+    logger.info(`   - New tickets saved: ${savedCount}`);
+    logger.info(`   - Existing tickets updated: ${updatedCount}`);
+    logger.info(`   - Vectorized in Qdrant: ${vectorizedCount}`);
+    logger.info(`   - Errors: ${errorCount}`);
     
     // Mark bulk import as completed
     await markBulkImportCompleted(allTickets.length);

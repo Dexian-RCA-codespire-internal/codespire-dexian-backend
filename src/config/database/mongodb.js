@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const logger = require('../../utils/logger');
 
 const connectMongoDB = async () => {
   try {
@@ -21,11 +22,11 @@ const connectMongoDB = async () => {
       
       // Construct authenticated URL
       mongoUrl = `mongodb://${encodeURIComponent(mongoUser)}:${encodeURIComponent(mongoPassword)}@${hostPort}/${database}`;
-      console.log('🔐 Using MongoDB with authentication');
+      logger.info('🔐 Using MongoDB with authentication');
     }
 
-    console.log('🔄 Connecting to MongoDB...');
-    console.log(`📍 MongoDB URL: ${mongoUrl.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`); // Hide credentials in logs
+    logger.info('Connecting to MongoDB...');
+    logger.info(`MongoDB URL: ${mongoUrl.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`); // Hide credentials in logs
 
     await mongoose.connect(mongoUrl, {
       serverSelectionTimeoutMS: 30000, // Increased from 5000ms to 30000ms
@@ -37,9 +38,9 @@ const connectMongoDB = async () => {
       waitQueueTimeoutMS: 5000, // Make the client wait up to 5 seconds for a connection to become available
     });
     
-    console.log('✅ MongoDB connection established successfully.');
-    console.log(`📊 Connection state: ${mongoose.connection.readyState}`);
-    console.log(`🏷️  Database name: ${mongoose.connection.name}`);
+    logger.info('✅ MongoDB connection established successfully.');
+    logger.info(`Connection state: ${mongoose.connection.readyState}`);
+    logger.info(`Database name: ${mongoose.connection.name}`);
     
   } catch (error) {
     console.error('❌ Unable to connect to MongoDB:', error.message);
@@ -64,7 +65,7 @@ const connectMongoDB = async () => {
 const disconnectMongoDB = async () => {
   try {
     await mongoose.disconnect();
-    console.log('✅ MongoDB disconnected successfully.');
+    logger.info('✅ MongoDB disconnected successfully.');
   } catch (error) {
     console.error('❌ Error disconnecting from MongoDB:', error);
   }
@@ -76,7 +77,7 @@ mongoose.connection.on('error', (err) => {
 });
 
 mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
+  logger.info('MongoDB disconnected');
 });
 
 process.on('SIGINT', async () => {

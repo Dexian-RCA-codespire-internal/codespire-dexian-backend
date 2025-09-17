@@ -7,6 +7,7 @@
 const crypto = require('crypto');
 const { getQdrantInstance } = require('../config/database');
 const { providers, vectorStore, utils } = require('../agents/shared');
+const logger = require('../utils/logger');
 
 // Extract specific functions from organized modules
 const { createEmbeddings } = providers.embedding;
@@ -43,7 +44,7 @@ class TicketVectorizationService {
         try {
             if (this.initialized) return;
 
-            console.log('🚀 Initializing Ticket Vectorization Service...');
+            logger.info('🚀 Initializing Ticket Vectorization Service...');
 
             // Initialize embeddings using shared utility
             this.embeddings = createEmbeddings();
@@ -63,7 +64,7 @@ class TicketVectorizationService {
             );
 
             this.initialized = true;
-            console.log('✅ Ticket Vectorization Service initialized successfully');
+            logger.info('✅ Ticket Vectorization Service initialized successfully');
         } catch (error) {
             console.error('❌ Failed to initialize Ticket Vectorization Service:', error);
             throw error;
@@ -139,7 +140,7 @@ class TicketVectorizationService {
 
             // Validate required fields
             if (!ticket.ticket_id || !ticket.source) {
-                console.log(`⚠️ Skipping ticket - missing required fields (ticket_id: ${ticket.ticket_id}, source: ${ticket.source})`);
+                logger.info(`⚠️ Skipping ticket - missing required fields (ticket_id: ${ticket.ticket_id}, source: ${ticket.source})`);
                 return { success: false, reason: 'Missing required fields' };
             }
 
@@ -147,11 +148,11 @@ class TicketVectorizationService {
             const ticketText = this.createTicketText(ticket);
             
             if (!ticketText.trim()) {
-                console.log(`⚠️ Skipping ticket ${ticket.ticket_id} - no text content for embedding`);
+                logger.info(`⚠️ Skipping ticket ${ticket.ticket_id} - no text content for embedding`);
                 return { success: false, reason: 'No text content' };
             }
 
-            console.log(`🔄 Vectorizing ticket: ${ticket.ticket_id}`);
+            logger.info(`🔄 Vectorizing ticket: ${ticket.ticket_id}`);
 
             // Generate embedding
             const embedding = await this.embeddings.embedQuery(ticketText);
@@ -180,7 +181,7 @@ class TicketVectorizationService {
                 }
             }]);
 
-            console.log(`✅ Successfully vectorized and stored ticket: ${ticket.ticket_id}`);
+            logger.info(`✅ Successfully vectorized and stored ticket: ${ticket.ticket_id}`);
             return { success: true, ticket_id: ticket.ticket_id };
 
         } catch (error) {
@@ -198,7 +199,7 @@ class TicketVectorizationService {
                 await this.initialize();
             }
 
-            console.log(`🔄 Vectorizing ${tickets.length} tickets in batch...`);
+            logger.info(`🔄 Vectorizing ${tickets.length} tickets in batch...`);
 
             const points = [];
             const results = {
@@ -272,10 +273,10 @@ class TicketVectorizationService {
                 }));
                 
                 await storeDocuments(this.qdrantClient, this.config.vectorDb.collectionName, documents);
-                console.log(`✅ Successfully stored ${points.length} vectors in Qdrant`);
+                logger.info(`✅ Successfully stored ${points.length} vectors in Qdrant`);
             }
 
-            console.log(`📊 Batch vectorization completed: ${results.successful} successful, ${results.failed} failed`);
+            logger.info(`📊 Batch vectorization completed: ${results.successful} successful, ${results.failed} failed`);
             return results;
 
         } catch (error) {
@@ -317,10 +318,10 @@ class TicketVectorizationService {
                     points: pointIds
                 });
 
-                console.log(`✅ Removed ticket ${mongoId} from Qdrant (${pointIds.length} points)`);
+                logger.info(`✅ Removed ticket ${mongoId} from Qdrant (${pointIds.length} points)`);
                 return { success: true, removedPoints: pointIds.length };
             } else {
-                console.log(`⚠️ No Qdrant points found for MongoDB ID ${mongoId}`);
+                logger.info(`⚠️ No Qdrant points found for MongoDB ID ${mongoId}`);
                 return { success: true, removedPoints: 0 };
             }
 

@@ -1,20 +1,22 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
+// const morgan = require('morgan'); // Removed - using Winston logger instead
 const http = require('http');
+const os = require('os');
+const logger = require('./utils/logger');
 require('dotenv').config();
 
 // Initialize SuperTokens
 const { initSuperTokens } = require('./config/supertokens');
 initSuperTokens();
 
-console.log('✅ SuperTokens initialized');
+logger.info('✅ SuperTokens initialized');
 
 // Initialize all databases (MongoDB and Qdrant)
 const { initializeDatabase } = require('./config/database');
 initializeDatabase().catch(error => {
-  console.error('Failed to initialize databases:', error);
+  logger.error('Failed to initialize databases:', error);
 });
 
 // Initialize ServiceNow Polling Service
@@ -32,7 +34,17 @@ const server = http.createServer(app);
 const PORT = process.env.PORT || 8081;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
   origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
     'http://localhost:3001', // Frontend URL
@@ -46,7 +58,7 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 200
 }));
-app.use(morgan('combined'));
+// app.use(morgan('combined')); // Removed - using Winston logger instead
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -56,7 +68,7 @@ app.use(middleware());
 
 // Debug: Log all incoming requests
 app.use((req, res, next) => {
-  console.log(`🔍 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'}`);
+  logger.info(`🔍 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'}`);
   next();
 });
 
@@ -121,7 +133,7 @@ app.use('/api/v1', require('./routes'));
 
 // SuperTokens routes should be handled by middleware, but let's add a fallback
 app.get('/auth/*', (req, res, next) => {
-  console.log(`🔍 SuperTokens route accessed: ${req.path}`);
+  logger.info(`🔍 SuperTokens route accessed: ${req.path}`);
   // Let SuperTokens middleware handle this
   next();
 });
@@ -135,7 +147,7 @@ app.get('/auth/test', (req, res) => {
 // Custom handler for verify-email route
 app.get('/auth/verify-email', async (req, res) => {
   try {
-    console.log('🔍 Custom verify-email route accessed');
+    logger.info('🔍 Custom verify-email route accessed');
     const { token, rid, tenantId } = req.query;
     
     if (!token) {
@@ -186,11 +198,11 @@ app.get('/auth/verify-email', async (req, res) => {
         res.status(400).json({ error: 'Invalid or expired token' });
       }
     } catch (error) {
-      console.error('Email verification error:', error);
+      logger.error('Email verification error:', error);
       res.status(400).json({ error: 'Email verification failed' });
     }
   } catch (error) {
-    console.error('Verify email route error:', error);
+    logger.error('Verify email route error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -200,7 +212,7 @@ app.use(errorHandler());
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).json({ 
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
@@ -215,13 +227,32 @@ app.use('*', (req, res) => {
 // Initialize WebSocket service
 webSocketService.initialize(server);
 
+// Get server IP address
+function getServerIP() {
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
+  
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        addresses.push(iface.address);
+      }
+    }
+  }
+  
+  return addresses.length > 0 ? addresses[0] : 'localhost';
+}
+
 server.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔌 WebSocket server initialized`);
+  const serverIP = getServerIP();
+  logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`🌐 IP: ${serverIP}`);
+  logger.info(`📱 Health check: http://localhost:${PORT}/health`);
+  logger.info(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed
-  console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
+  logger.info(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
   if (config.servicenow.enableBulkImport) {
     try {
       // Check if bulk import has already been completed
@@ -229,31 +260,31 @@ server.listen(PORT, async () => {
       
       if (alreadyCompleted) {
         const status = await getBulkImportStatus();
-        console.log('ℹ️ Bulk import already completed. Skipping startup import.');
-        console.log(`   - Last import: ${status.lastImportTime}`);
-        console.log(`   - Total imported: ${status.totalImported}`);
-        console.log('   - Use manual endpoint to force re-import if needed');
+        logger.info('ℹ️ Bulk import already completed. Skipping startup import.');
+        logger.info(`   - Last import: ${status.lastImportTime}`);
+        logger.info(`   - Total imported: ${status.totalImported}`);
+        logger.info('   - Use manual endpoint to force re-import if needed');
       } else {
-        console.log('🔄 Starting ServiceNow bulk import (first time setup)...');
+        logger.info('🔄 Starting ServiceNow bulk import (first time setup)...');
         const result = await bulkImportAllTickets({
           batchSize: config.servicenow.bulkImportBatchSize
         });
         
         if (result.success) {
-          console.log(`✅ ServiceNow bulk import completed successfully:`);
-          console.log(`   - Total tickets imported: ${result.total}`);
-          console.log(`   - New tickets: ${result.database.saved}`);
-          console.log(`   - Updated tickets: ${result.database.updated}`);
-          console.log(`   - Errors: ${result.database.errors}`);
+          logger.info(`✅ ServiceNow bulk import completed successfully:`);
+          logger.info(`   - Total tickets imported: ${result.total}`);
+          logger.info(`   - New tickets: ${result.database.saved}`);
+          logger.info(`   - Updated tickets: ${result.database.updated}`);
+          logger.info(`   - Errors: ${result.database.errors}`);
         } else {
-          console.error('❌ ServiceNow bulk import failed:', result.error);
+          logger.error('❌ ServiceNow bulk import failed:', result.error);
         }
       }
     } catch (error) {
-      console.error('❌ Failed to perform ServiceNow bulk import:', error);
+      logger.error('❌ Failed to perform ServiceNow bulk import:', error);
     }
   } else {
-    console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
+    logger.info('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
   }
 
   // Auto-trigger bulk import if database is empty (regardless of bulk import state)
@@ -262,13 +293,13 @@ server.listen(PORT, async () => {
     const stats = await getTicketStats('ServiceNow');
     
     if (stats.success && stats.data.total === 0) {
-      console.log('🔍 Database is empty - auto-triggering bulk import...');
-      console.log('ℹ️ First-time setup detected. This may take a few minutes.');
+      logger.info('🔍 Database is empty - auto-triggering bulk import...');
+      logger.info('ℹ️ First-time setup detected. This may take a few minutes.');
       
       // Reset bulk import state to allow fresh import
       const { resetBulkImportState } = require('./services/servicenowIngestionService');
       await resetBulkImportState();
-      console.log('🔄 Bulk import state reset for fresh import');
+      logger.info('🔄 Bulk import state reset for fresh import');
       
       // Trigger bulk import
       const { bulkImportAllTickets } = require('./services/servicenowIngestionService');
@@ -278,11 +309,11 @@ server.listen(PORT, async () => {
       });
       
       if (result.success) {
-        console.log(`✅ Auto bulk import completed successfully:`);
-        console.log(`   - Total tickets imported: ${result.total}`);
-        console.log(`   - New tickets: ${result.database.saved}`);
-        console.log(`   - Updated tickets: ${result.database.updated}`);
-        console.log(`   - Errors: ${result.database.errors}`);
+        logger.info(`✅ Auto bulk import completed successfully:`);
+        logger.info(`   - Total tickets imported: ${result.total}`);
+        logger.info(`   - New tickets: ${result.database.saved}`);
+        logger.info(`   - Updated tickets: ${result.database.updated}`);
+        logger.info(`   - Errors: ${result.database.errors}`);
         
         // Emit notification to frontend about completion
         webSocketService.emitNotification(
@@ -290,43 +321,43 @@ server.listen(PORT, async () => {
           'success'
         );
       } else {
-        console.error('❌ Auto bulk import failed:', result.error);
+        logger.error('❌ Auto bulk import failed:', result.error);
         webSocketService.emitNotification(
           'Initial data import failed. Please check server logs.',
           'error'
         );
       }
     } else if (stats.success) {
-      console.log(`ℹ️ Database contains ${stats.data.total} tickets - no auto-import needed`);
+      logger.info(`ℹ️ Database contains ${stats.data.total} tickets - no auto-import needed`);
     }
   } catch (error) {
-    console.error('❌ Failed to check database status for auto-import:', error);
+    logger.error('❌ Failed to check database status for auto-import:', error);
   }
   
   // Debug: Log ServiceNow configuration
-  console.log('🔧 ServiceNow Configuration:');
-  console.log(`   - enablePolling: ${config.servicenow.enablePolling}`);
-  console.log(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
-  console.log(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
-  console.log(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
-  console.log(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
+  logger.info('🔧 ServiceNow Configuration:');
+  logger.info(`   - enablePolling: ${config.servicenow.enablePolling}`);
+  logger.info(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
+  logger.info(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
+  logger.info(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
+  logger.info(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
   
   // Initialize ServiceNow polling service if enabled
   if (config.servicenow.enablePolling) {
     try {
-      console.log('🚀 Initializing ServiceNow polling service...');
+      logger.info('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
-      console.log('✅ ServiceNow polling service initialized successfully');
+      logger.info('✅ ServiceNow polling service initialized successfully');
       
       // Reset polling status to healthy on server startup
-      console.log('🔄 Resetting polling status to healthy on startup...');
+      logger.info('🔄 Resetting polling status to healthy on startup...');
       await pollingService.resetPollingStatus();
-      console.log('✅ Polling status reset to healthy');
+      logger.info('✅ Polling status reset to healthy');
     } catch (error) {
-      console.error('❌ Failed to initialize ServiceNow polling service:', error);
+      logger.error('❌ Failed to initialize ServiceNow polling service:', error);
     }
   } else {
-    console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+    logger.info('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
   }
 });
 

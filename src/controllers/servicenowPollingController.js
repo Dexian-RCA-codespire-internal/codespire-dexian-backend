@@ -32,7 +32,7 @@ const getPollingStatus = async (req, res) => {
  */
 const performHealthCheck = async (req, res) => {
   try {
-    console.log('🔍 Manual health check triggered via API');
+    console.log('Manual health check triggered via API');
     const healthCheck = await pollingService.performHealthCheckAndEmit();
     
     res.status(200).json({

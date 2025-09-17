@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 class EmailService {
   constructor() {
@@ -27,7 +28,7 @@ class EmailService {
           socketTimeout: 60000
         });
 
-      console.log('📧 Email service initialized');
+      logger.info('📧 Email service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize email service:', error);
     }
@@ -39,7 +40,7 @@ class EmailService {
         throw new Error('Email transporter not initialized');
       }
 
-      console.log(process.env.SMTP_USER, process.env.SMTP_PASSWORD)
+      logger.debug(process.env.SMTP_USER, process.env.SMTP_PASSWORD)
       const mailOptions = {
         from: `"${config.email.smtp.fromName}" <${config.email.smtp.fromEmail}>`,
         to: email,
@@ -49,7 +50,7 @@ class EmailService {
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ OTP email sent successfully:', result.messageId);
+      logger.info('✅ OTP email sent successfully:', result.messageId);
       
       return {
         success: true,
@@ -66,7 +67,7 @@ class EmailService {
 
   async sendMagicLinkEmail(email, name, magicLink) {
     try {
-      console.log('📧 sendMagicLinkEmail called with:', { email, name, magicLink });
+      logger.info('📧 sendMagicLinkEmail called with:', { email, name, magicLink });
       if (!this.transporter) {
         console.error('❌ Email transporter not initialized');
         throw new Error('Email transporter not initialized');
@@ -81,7 +82,7 @@ class EmailService {
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Magic link email sent successfully:', result.messageId);
+      logger.info('✅ Magic link email sent successfully:', result.messageId);
       
       return {
         success: true,
@@ -111,7 +112,7 @@ class EmailService {
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Welcome email sent successfully:', result.messageId);
+      logger.info('✅ Welcome email sent successfully:', result.messageId);
       
       return {
         success: true,
@@ -361,7 +362,7 @@ This is an automated message. Please do not reply to this email.
       }
 
       await this.transporter.verify();
-      console.log('✅ Email service connection verified');
+      logger.info('✅ Email service connection verified');
       return { success: true };
     } catch (error) {
       console.error('❌ Email service connection failed:', error);
@@ -384,7 +385,7 @@ This is an automated message. Please do not reply to this email.
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Password reset OTP email sent successfully:', result.messageId);
+      logger.info('✅ Password reset OTP email sent successfully:', result.messageId);
       
       return {
         success: true,
@@ -415,7 +416,7 @@ This is an automated message. Please do not reply to this email.
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Password reset email sent successfully:', result.messageId);
+      logger.info('✅ Password reset email sent successfully:', result.messageId);
       
       return {
         success: true,

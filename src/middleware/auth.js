@@ -1,6 +1,7 @@
 const { verifySession } = require('supertokens-node/recipe/session/framework/express');
 const { getUserById } = require('supertokens-node/recipe/emailpassword');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 // Original simple authentication (for backward compatibility)
 const authenticateToken = async (req, res, next) => {
@@ -55,7 +56,7 @@ const logAuthenticatedRequest = (req, res, next) => {
   const startTime = Date.now();
   
   // Log request
-  console.log(`🔐 Authenticated Request: ${req.method} ${req.path}`, {
+  logger.info(`🔐 Authenticated Request: ${req.method} ${req.path}`, {
     userId: req.session?.getUserId?.(),
     ip: req.ip,
     userAgent: req.get('user-agent'),
@@ -67,7 +68,7 @@ const logAuthenticatedRequest = (req, res, next) => {
   res.end = function(chunk, encoding) {
     const duration = Date.now() - startTime;
     
-    console.log(`📤 Response: ${req.method} ${req.path}`, {
+    logger.info(`📤 Response: ${req.method} ${req.path}`, {
       status: res.statusCode,
       duration: `${duration}ms`,
       userId: req.session?.getUserId?.(),

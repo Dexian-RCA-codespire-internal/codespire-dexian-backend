@@ -2,6 +2,7 @@
 // This file serves as the main entry point for storage operations
 
 const config = require('../config');
+const logger = require('../../utils/logger');
 
 let storageService = null;
 
@@ -24,11 +25,11 @@ const initializeStorage = () => {
         storageService = new LocalStorageService();
         break;
       default:
-        console.log('⚠️  No storage service configured');
+        logger.info('⚠️  No storage service configured');
         storageService = null;
     }
     
-    console.log(`📦 Storage service initialized: ${storageType || 'none'}`);
+    logger.info(`📦 Storage service initialized: ${storageType || 'none'}`);
   } catch (error) {
     console.error('❌ Storage initialization failed:', error);
     storageService = null;

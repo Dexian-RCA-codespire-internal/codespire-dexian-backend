@@ -4,6 +4,7 @@
  */
 
 const swaggerEndpoints = new Map();
+const logger = require('./logger');
 
 /**
  * Auto-register an endpoint for Swagger documentation
@@ -89,7 +90,7 @@ function registerEndpoint(config) {
   const key = `${method.toLowerCase()}:${path}`;
   swaggerEndpoints.set(key, endpointSpec);
 
-  console.log(`📝 Auto-registered endpoint: ${method.toUpperCase()} ${path}`);
+  logger.info(`📝 Auto-registered endpoint: ${method.toUpperCase()} ${path}`);
 }
 
 /**

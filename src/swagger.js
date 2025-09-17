@@ -2,6 +2,7 @@ const swaggerJSDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const path = require('path');
 const { getRegisteredEndpoints } = require('./utils/swaggerAutoRegister');
+const logger = require('./utils/logger');
 
 // Swagger definition
 const swaggerDefinition = {
@@ -209,10 +210,10 @@ const setupSwagger = (app, port = 8000) => {
     res.send(currentSpec);
   });
 
-  console.log('📚 Swagger documentation available at:');
-  console.log(`   - Interactive docs: http://localhost:${port}/api/docs`);
-  console.log(`   - JSON spec: http://localhost:${port}/api/docs.json`);
-  console.log('📝 Auto-registration enabled - endpoints will be documented automatically!');
+  logger.info('📚 Swagger documentation available at:');
+  logger.info(`   - Interactive docs: http://localhost:${port}/api/docs`);
+  logger.info(`   - JSON spec: http://localhost:${port}/api/docs.json`);
+  logger.info('📝 Auto-registration enabled - endpoints will be documented automatically!');
 };
 
 module.exports = {

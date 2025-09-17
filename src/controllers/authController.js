@@ -4,6 +4,7 @@ const { signInUp, getUserById, signIn, signUp } = require('supertokens-node/reci
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
 const supertokens = require('supertokens-node');
+const logger = require('../utils/logger');
 const config = require('../config');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
@@ -37,7 +38,7 @@ const register = async (req, res) => {
     // SuperTokens handles user creation and password hashing
     const response = await signUp('public', email, password);
     
-    console.log(response)
+    logger.info(response)
     if (response.status === 'OK') {
       try {
         // Create user in our database
@@ -724,7 +725,7 @@ const verifyCustomOTP = async (req, res) => {
         );
         if (tokenRes.status === "OK") {
           await EmailVerification.verifyEmailUsingToken("public", tokenRes.token);
-          console.log('✅ Email marked as verified in SuperTokens (custom OTP)');
+          logger.info('✅ Email marked as verified in SuperTokens (custom OTP)');
         }
       } catch (e) {
         console.error("Failed to mark verified in SuperTokens (custom OTP):", e);
@@ -734,7 +735,7 @@ const verifyCustomOTP = async (req, res) => {
       user.isEmailVerified = true;
       user.emailVerifiedAt = new Date();
       await user.save();
-      console.log('✅ Email marked as verified in local DB (custom OTP)');
+      logger.info('✅ Email marked as verified in local DB (custom OTP)');
 
       // Send welcome email
       const welcomeEmailResult = await emailService.sendWelcomeEmail(user.email, user.name);
@@ -783,7 +784,7 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    console.log('User found:', {
+    logger.info('User found:', {
       email: user.email,
       supertokensUserId: user.supertokensUserId,
       userIdType: typeof user.supertokensUserId
@@ -866,7 +867,7 @@ const resetPasswordWithToken = async (req, res) => {
     const EmailPassword = require('supertokens-node/recipe/emailpassword').default;
     
     try {
-      console.log('Attempting to reset password for user:', user.supertokensUserId);
+      logger.info('Attempting to reset password for user:', user.supertokensUserId);
       
       // Get the user from SuperTokens to find the email-password recipe user id
       const u = await supertokens.getUser(user.supertokensUserId);
@@ -889,7 +890,7 @@ const resetPasswordWithToken = async (req, res) => {
         });
       }
       
-      console.log('Found EP login method:', {
+      logger.info('Found EP login method:', {
         recipeId: epLogin.recipeId,
         tenantIds: epLogin.tenantIds,
         recipeUserId: epLogin.recipeUserId.getAsString()
@@ -902,7 +903,7 @@ const resetPasswordWithToken = async (req, res) => {
         tenantIdForPasswordPolicy: 'public'
       });
       
-      console.log('Password update result:', updateResult);
+      logger.info('Password update result:', updateResult);
       
       if (updateResult.status === 'OK') {
         // Clear the reset token after successful password reset

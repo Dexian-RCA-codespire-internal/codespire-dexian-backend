@@ -1,6 +1,7 @@
 // new file servicenow
 const { Server } = require('socket.io');
 const { fetchTicketsFromDB, getTicketStats } = require('./ticketsService');
+const logger = require('../utils/logger');
 
 class WebSocketService {
   constructor() {
@@ -26,7 +27,7 @@ class WebSocketService {
     });
 
     this.setupEventHandlers();
-    console.log('✅ WebSocket service initialized');
+    logger.info('✅ WebSocket service initialized');
   }
 
   /**
@@ -34,24 +35,24 @@ class WebSocketService {
    */
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`🔌 Client connected: ${socket.id}`);
+      logger.info(`🔌 Client connected: ${socket.id}`);
       this.connectedClients.add(socket.id);
 
       // Handle client joining specific rooms
       socket.on('join_room', (room) => {
         socket.join(room);
-        console.log(`📡 Client ${socket.id} joined room: ${room}`);
+        logger.info(`📡 Client ${socket.id} joined room: ${room}`);
       });
 
       // Handle client leaving rooms
       socket.on('leave_room', (room) => {
         socket.leave(room);
-        console.log(`📡 Client ${socket.id} left room: ${room}`);
+        logger.info(`📡 Client ${socket.id} left room: ${room}`);
       });
 
       // Handle client disconnection
       socket.on('disconnect', () => {
-        console.log(`🔌 Client disconnected: ${socket.id}`);
+        logger.info(`🔌 Client disconnected: ${socket.id}`);
         this.connectedClients.delete(socket.id);
       });
 
@@ -105,7 +106,7 @@ class WebSocketService {
     // Also emit to specific room for tickets
     this.io.to('tickets').emit('ticket_update', eventData);
     
-    console.log(`📡 Emitted ${eventType} to ${this.connectedClients.size} clients`);
+    logger.info(`📡 Emitted ${eventType} to ${this.connectedClients.size} clients`);
   }
 
   /**
@@ -140,9 +141,11 @@ class WebSocketService {
       timestamp: new Date().toISOString()
     };
 
-    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients:`, eventData);
+    // Create a compact summary for logging instead of full JSON
+    const statusSummary = `${eventData.status.status} - ${eventData.status.message}`;
+    logger.info(`📡 Emitting polling status to ${this.connectedClients.size} clients: ${statusSummary}`);
     this.io.emit('polling_status', eventData);
-    console.log(`✅ Polling status emitted successfully`);
+    logger.info(`✅ Polling status emitted successfully`);
   }
 
   /**
@@ -164,7 +167,7 @@ class WebSocketService {
     };
 
     this.io.emit('notification', eventData);
-    console.log(`📡 Emitted notification to ${this.connectedClients.size} clients`);
+    logger.info(`📡 Emitted notification to ${this.connectedClients.size} clients`);
   }
 
   /**
@@ -183,7 +186,7 @@ class WebSocketService {
   async handlePaginatedDataRequest(socket, options = {}) {
     const clientId = socket.id;
     try {
-      console.log(`📄 Handling paginated data request for client ${clientId}`);
+      logger.info(`📄 Handling paginated data request for client ${clientId}`);
       
       const { 
         page = 1, 
@@ -216,7 +219,7 @@ class WebSocketService {
           pagination: result.pagination,
           timestamp: new Date().toISOString()
         });
-        console.log(`✅ Sent paginated data to client ${clientId}: ${result.data.length} tickets (page ${page})`);
+        logger.info(`✅ Sent paginated data to client ${clientId}: ${result.data.length} tickets (page ${page})`);
       } else {
         throw new Error(result.error || 'Failed to fetch paginated data');
       }
@@ -238,7 +241,7 @@ class WebSocketService {
   async handleDataStatisticsRequest(socket, options = {}) {
     const clientId = socket.id;
     try {
-      console.log(`📊 Handling statistics request for client ${clientId}`);
+      logger.info(`📊 Handling statistics request for client ${clientId}`);
       
       const { source = 'ServiceNow' } = options;
       const result = await getTicketStats(source);
@@ -249,7 +252,7 @@ class WebSocketService {
           data: result.data,
           timestamp: new Date().toISOString()
         });
-        console.log(`✅ Sent statistics to client ${clientId}`);
+        logger.info(`✅ Sent statistics to client ${clientId}`);
       } else {
         throw new Error(result.error || 'Failed to fetch statistics');
       }
@@ -278,7 +281,7 @@ class WebSocketService {
   async handleInitialSync(socket, options = {}) {
     const clientId = socket.id;
     try {
-      console.log(`🔄 Starting initial sync for client ${clientId}`);
+      logger.info(`🔄 Starting initial sync for client ${clientId}`);
       
       const { 
         batchSize = 50, 
@@ -315,7 +318,7 @@ class WebSocketService {
       const totalTickets = countResult.pagination.totalCount;
       const totalBatches = Math.ceil(totalTickets / batchSize);
 
-      console.log(`📦 Initial sync: ${totalTickets} tickets in ${totalBatches} batches`);
+      logger.info(`📦 Initial sync: ${totalTickets} tickets in ${totalBatches} batches`);
 
       // Send tickets in batches
       for (let batchNum = 1; batchNum <= totalBatches; batchNum++) {
@@ -354,7 +357,7 @@ class WebSocketService {
         timestamp: new Date().toISOString()
       });
 
-      console.log(`✅ Initial sync completed for client ${clientId}: ${totalTickets} tickets`);
+      logger.info(`✅ Initial sync completed for client ${clientId}: ${totalTickets} tickets`);
 
     } catch (error) {
       console.error(`❌ Initial sync failed for client ${clientId}:`, error.message);
@@ -380,7 +383,7 @@ class WebSocketService {
   async handleIncrementalSync(socket, options = {}) {
     const clientId = socket.id;
     try {
-      console.log(`🔄 Starting incremental sync for client ${clientId}`);
+      logger.info(`🔄 Starting incremental sync for client ${clientId}`);
       
       const { 
         since, 
@@ -409,9 +412,9 @@ class WebSocketService {
           timestamp: new Date().toISOString()
         });
 
-        console.log(`✅ Incremental sync completed for client ${clientId}: ${result.data.length} updated tickets`);
+        logger.info(`✅ Incremental sync completed for client ${clientId}: ${result.data.length} updated tickets`);
       } else {
-        console.log(`ℹ️ No updates found for client ${clientId} since ${since}`);
+        logger.info(`ℹ️ No updates found for client ${clientId} since ${since}`);
       }
 
       socket.emit('incremental_sync_complete', {

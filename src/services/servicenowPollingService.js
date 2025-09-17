@@ -4,6 +4,7 @@ const { fetchTicketsAndSave } = require('./servicenowIngestionService');
 const { webSocketService } = require('./websocketService');
 const config = require('../config');
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 
 // Create a schema for tracking polling state
 const PollingStateSchema = new mongoose.Schema({
@@ -40,7 +41,7 @@ class ServiceNowPollingService {
    */
   async initialize() {
     try {
-      console.log('🚀 Initializing ServiceNow polling service...');
+      logger.info('Initializing ServiceNow polling service...');
       
       // Ensure polling state exists
       await this.ensurePollingState();
@@ -51,7 +52,7 @@ class ServiceNowPollingService {
       // Start periodic health check
       this.startPeriodicHealthCheck();
       
-      console.log('✅ ServiceNow polling service initialized successfully');
+      logger.info('✅ ServiceNow polling service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize ServiceNow polling service:', error);
       throw error;
@@ -78,7 +79,7 @@ class ServiceNowPollingService {
         isActive: true
       });
       
-      console.log(`📅 Created initial polling state with timestamp: ${initialTimestamp.toISOString()}`);
+      logger.info(`📅 Created initial polling state with timestamp: ${initialTimestamp.toISOString()}`);
     }
   }
 
@@ -87,11 +88,11 @@ class ServiceNowPollingService {
    */
   startPolling() {
     if (this.cronJob) {
-      console.log('⚠️ Polling service is already running');
+      logger.info('⚠️ Polling service is already running');
       return;
     }
 
-    console.log(`⏰ Starting ServiceNow polling with interval: ${this.pollingInterval}`);
+    logger.info(`⏰ Starting ServiceNow polling with interval: ${this.pollingInterval}`);
     
     this.cronJob = cron.schedule(this.pollingInterval, async () => {
       await this.performPoll();
@@ -117,7 +118,7 @@ class ServiceNowPollingService {
     // Stop periodic health check
     this.stopPeriodicHealthCheck();
     
-    console.log('⏹️ ServiceNow polling service stopped');
+    logger.info('ServiceNow polling service stopped');
   }
 
   /**
@@ -185,21 +186,21 @@ class ServiceNowPollingService {
    * Step 3: Comprehensive ServiceNow health check (credentials + connectivity)
    */
   async performHealthCheck() {
-    console.log('🔍 Starting ServiceNow health check...');
+    logger.info('Starting ServiceNow health check...');
     
     try {
       // Step 1: Check credentials
-      console.log('📋 Step 1: Checking credentials configuration...');
+      logger.info('Step 1: Checking credentials configuration...');
       this.checkCredentialsConfigured();
-      console.log('✅ Credentials are configured');
+      logger.info('✅ Credentials are configured');
       
       // Step 2: Test connectivity
-      console.log('🌐 Step 2: Testing ServiceNow API connectivity...');
+      logger.info('Step 2: Testing ServiceNow API connectivity...');
       const connectivityResult = await this.testServiceNowConnectivity();
-      console.log(`✅ ${connectivityResult.message}`);
+      logger.info(`✅ ${connectivityResult.message}`);
       
       // If we get here, everything is healthy
-      console.log('🎉 ServiceNow health check passed - all systems operational');
+      logger.info('✅ ServiceNow health check passed - all systems operational');
       
       return {
         success: true,
@@ -229,17 +230,17 @@ class ServiceNowPollingService {
    */
   startPeriodicHealthCheck() {
     if (this.healthCheckInterval) {
-      console.log('🔄 Periodic health check already running');
+      logger.info('Periodic health check already running');
       return;
     }
 
-    console.log(`🔍 Starting periodic health check every ${this.healthCheckIntervalMinutes} minute(s)`);
+    logger.info(`Starting periodic health check every ${this.healthCheckIntervalMinutes} minute(s)`);
     
     this.healthCheckInterval = setInterval(async () => {
       try {
-        console.log('🔍 Running periodic ServiceNow health check...');
+        logger.info('Running periodic ServiceNow health check...');
         await this.performHealthCheckAndEmit();
-        console.log('✅ Periodic health check completed');
+        logger.info('✅ Periodic health check completed');
       } catch (error) {
         console.error('❌ Periodic health check error:', error);
       }
@@ -253,7 +254,7 @@ class ServiceNowPollingService {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
-      console.log('⏹️ Periodic health check stopped');
+      logger.info('Periodic health check stopped');
     }
   }
 
@@ -357,12 +358,12 @@ class ServiceNowPollingService {
     if (!this.isRunning) return;
 
     try {
-      console.log('🔄 Starting ServiceNow poll...');
+      logger.info('Starting ServiceNow poll...');
       
       // Get current polling state
       const pollingState = await PollingState.findOne({ service: 'servicenow' });
       if (!pollingState || !pollingState.isActive) {
-        console.log('⚠️ Polling is disabled or state not found');
+        logger.info('⚠️ Polling is disabled or state not found');
         // Emit polling status even when disabled
         webSocketService.emitPollingStatus({
           timestamp: new Date(),
@@ -399,7 +400,7 @@ class ServiceNowPollingService {
       // ServiceNow query for tickets created or updated since last sync
       const query = `sys_created_on>=${this.formatServiceNowDate(lastSyncTime)}^ORsys_updated_on>=${this.formatServiceNowDate(lastSyncTime)}`;
       
-      console.log(`🔍 Polling for tickets since: ${lastSyncTime.toISOString()}`);
+      logger.info(`Polling for tickets since: ${lastSyncTime.toISOString()}`);
       
       // Fetch tickets with the timestamp filter and save to database
       const result = await fetchTicketsAndSave({
@@ -411,10 +412,10 @@ class ServiceNowPollingService {
         const newTicketsCount = result.database?.saved || 0;
         const updatedTicketsCount = result.database?.updated || 0;
         
-        console.log(`✅ Poll completed successfully:`);
-        console.log(`   - New tickets: ${newTicketsCount}`);
-        console.log(`   - Updated tickets: ${updatedTicketsCount}`);
-        console.log(`   - Total processed: ${result.total}`);
+        logger.info(`✅ Poll completed successfully:`);
+        logger.info(`   - New tickets: ${newTicketsCount}`);
+        logger.info(`   - Updated tickets: ${updatedTicketsCount}`);
+        logger.info(`   - Total processed: ${result.total}`);
 
         // Update polling state with successful poll
         await PollingState.updateOne(
@@ -559,7 +560,7 @@ class ServiceNowPollingService {
    */
   emitPollingEvent(eventType, data) {
     // This can be extended to emit events to WebSocket clients, etc.
-    console.log(`📡 Polling event: ${eventType}`, data);
+    logger.info(`Polling event: ${eventType}`, data);
   }
 
   /**
@@ -594,7 +595,7 @@ class ServiceNowPollingService {
           message: 'ServiceNow health check passed - system operational'
         });
         
-        console.log('✅ ServiceNow health check passed - polling status set to healthy');
+        logger.info('✅ ServiceNow health check passed - polling status set to healthy');
       } else {
         // Health check failed - set to unhealthy
         await PollingState.updateOne(
@@ -619,7 +620,7 @@ class ServiceNowPollingService {
           message: healthCheck.message
         });
         
-        console.log(`❌ ServiceNow health check failed - polling status set to unhealthy: ${healthCheck.message}`);
+        logger.warn(`❌ ServiceNow health check failed - polling status set to unhealthy: ${healthCheck.message}`);
       }
     } catch (error) {
       console.error('❌ Failed to perform health check:', error);
@@ -676,7 +677,7 @@ class ServiceNowPollingService {
    * Manually trigger a poll (for testing or manual sync)
    */
   async triggerManualPoll() {
-    console.log('🔧 Manual poll triggered');
+    logger.info('Manual poll triggered');
     await this.performPoll();
   }
 
@@ -701,7 +702,7 @@ class ServiceNowPollingService {
       }
     );
     
-    console.log('🔄 Polling state reset to 24 hours ago');
+    logger.info('Polling state reset to 24 hours ago');
   }
 }
 

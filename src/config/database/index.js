@@ -4,6 +4,7 @@
 const config = require('../index');
 const QdrantConfig = require('./qdrant');
 const { connectMongoDB } = require('./mongodb');
+const logger = require('../../utils/logger');
 
 // Import database connections based on configuration
 let dbConnection = null;
@@ -13,12 +14,12 @@ let qdrantInstance = null;
 // Initialize database based on configuration
 const initializeDatabase = async () => {
   try {
-    console.log('📊 Initializing databases...');
+    logger.info('📊 Initializing databases...');
     
     // Initialize MongoDB first (required for most operations)
     try {
       await connectMongoDB();
-      console.log('✅ MongoDB database initialized successfully');
+      logger.info('✅ MongoDB database initialized successfully');
     } catch (error) {
       console.error('❌ MongoDB initialization failed:', error.message);
       // MongoDB is critical, so we should throw the error
@@ -30,14 +31,14 @@ const initializeDatabase = async () => {
       try {
         qdrantInstance = new QdrantConfig();
         await qdrantInstance.connect();
-        console.log('✅ Qdrant vector database initialized successfully');
+        logger.info('✅ Qdrant vector database initialized successfully');
       } catch (error) {
         console.error('❌ Qdrant initialization failed:', error.message);
         // Continue with other databases even if Qdrant fails
       }
     }
     
-    console.log('✅ Database initialization completed');
+    logger.info('✅ Database initialization completed');
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
     throw error;
