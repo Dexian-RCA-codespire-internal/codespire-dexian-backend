@@ -20,7 +20,12 @@ const fetchTicketsFromDB = async (options = {}) => {
       category,
       source = 'ServiceNow',
       sortBy = 'opened_time',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      // New filter parameters
+      sources = [],
+      priorities = [],
+      dateRange = { startDate: '', endDate: '' },
+      stages = []
     } = options;
 
     // Calculate offset from page if provided
@@ -34,8 +39,10 @@ const fetchTicketsFromDB = async (options = {}) => {
     // Build query filter
     const filter = {};
     
-    // Add source filter
-    if (source) {
+    // Add source filter - handle both single source and multiple sources
+    if (sources && sources.length > 0) {
+      filter.source = { $in: sources };
+    } else if (source) {
       filter.source = source;
     }
 
@@ -44,14 +51,32 @@ const fetchTicketsFromDB = async (options = {}) => {
       filter.status = status;
     }
 
-    // Add priority filter
-    if (priority) {
+    // Add priority filter - handle both single priority and multiple priorities
+    if (priorities && priorities.length > 0) {
+      filter.priority = { $in: priorities };
+    } else if (priority) {
       filter.priority = priority;
     }
 
     // Add category filter
     if (category) {
       filter.category = category;
+    }
+
+    // Add date range filter
+    if (dateRange && (dateRange.startDate || dateRange.endDate)) {
+      filter.opened_time = {};
+      if (dateRange.startDate) {
+        filter.opened_time.$gte = new Date(dateRange.startDate);
+      }
+      if (dateRange.endDate) {
+        filter.opened_time.$lte = new Date(dateRange.endDate);
+      }
+    }
+
+    // Add stages filter (if stages field exists in the ticket model)
+    if (stages && stages.length > 0) {
+      filter.stage = { $in: stages };
     }
 
     // Add text search if query provided

@@ -194,7 +194,12 @@ class WebSocketService {
         category, 
         source = 'ServiceNow',
         sortBy = 'opened_time',
-        sortOrder = 'desc'
+        sortOrder = 'desc',
+        // Extract filter arrays from options
+        sources = [],
+        priorities = [],
+        dateRange = { startDate: '', endDate: '' },
+        stages = []
       } = options;
 
       const result = await fetchTicketsFromDB({
@@ -206,7 +211,12 @@ class WebSocketService {
         category,
         source,
         sortBy,
-        sortOrder
+        sortOrder,
+        // Pass filter arrays
+        sources,
+        priorities,
+        dateRange,
+        stages
       });
 
       if (result.success) {
