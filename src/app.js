@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const http = require('http');
 require('dotenv').config();
 
 // Initialize SuperTokens
@@ -10,18 +11,25 @@ initSuperTokens();
 
 console.log('✅ SuperTokens initialized');
 
-// Initialize MongoDB
-const { connectMongoDB } = require('./config/database/mongodb');
-connectMongoDB();
+// Initialize all databases (MongoDB and Qdrant)
+const { initializeDatabase } = require('./config/database');
+initializeDatabase().catch(error => {
+  console.error('Failed to initialize databases:', error);
+});
 
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
+const { webSocketService } = require('./services/websocketService');
 const config = require('./config');
 
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+
+// Create HTTP server
+const server = http.createServer(app);
+
+const PORT = process.env.PORT || 8081;
 
 // Middleware
 app.use(helmet());
@@ -52,7 +60,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the current health status of the server
+ *     tags:
+ *       - Health
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthCheck'
+ *             example:
+ *               status: "OK"
+ *               timestamp: "2024-01-15T10:30:00.000Z"
+ *               uptime: 3600
+ */
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -60,6 +87,32 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Debug endpoint for ServiceNow polling status
+app.get('/debug/polling', async (req, res) => {
+  try {
+    const status = await pollingService.getStatus();
+    res.json({
+      success: true,
+      config: {
+        enablePolling: config.servicenow.enablePolling,
+        pollingInterval: config.servicenow.pollingInterval,
+        servicenowUrl: config.servicenow.url ? 'Set' : 'Not set',
+        servicenowUsername: config.servicenow.username ? 'Set' : 'Not set'
+      },
+      pollingStatus: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Setup Swagger documentation
+const { setupSwagger } = require('./swagger');
+setupSwagger(app, PORT);
 
 // API routes
 app.use('/api/v1', require('./routes'));
@@ -159,9 +212,13 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, async () => {
+// Initialize WebSocket service
+webSocketService.initialize(server);
+
+server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed
   console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
@@ -198,11 +255,73 @@ app.listen(PORT, async () => {
   } else {
     console.log('ℹ️ Bulk import not triggered - disabled (set SERVICENOW_ENABLE_BULK_IMPORT=true to enable)');
   }
+
+  // Auto-trigger bulk import if database is empty (regardless of bulk import state)
+  try {
+    const { getTicketStats } = require('./services/ticketsService');
+    const stats = await getTicketStats('ServiceNow');
+    
+    if (stats.success && stats.data.total === 0) {
+      console.log('🔍 Database is empty - auto-triggering bulk import...');
+      console.log('ℹ️ First-time setup detected. This may take a few minutes.');
+      
+      // Reset bulk import state to allow fresh import
+      const { resetBulkImportState } = require('./services/servicenowIngestionService');
+      await resetBulkImportState();
+      console.log('🔄 Bulk import state reset for fresh import');
+      
+      // Trigger bulk import
+      const { bulkImportAllTickets } = require('./services/servicenowIngestionService');
+      const result = await bulkImportAllTickets({
+        batchSize: config.servicenow.bulkImportBatchSize,
+        force: true // Force import even if state says completed
+      });
+      
+      if (result.success) {
+        console.log(`✅ Auto bulk import completed successfully:`);
+        console.log(`   - Total tickets imported: ${result.total}`);
+        console.log(`   - New tickets: ${result.database.saved}`);
+        console.log(`   - Updated tickets: ${result.database.updated}`);
+        console.log(`   - Errors: ${result.database.errors}`);
+        
+        // Emit notification to frontend about completion
+        webSocketService.emitNotification(
+          `Initial data import completed: ${result.total} tickets loaded`,
+          'success'
+        );
+      } else {
+        console.error('❌ Auto bulk import failed:', result.error);
+        webSocketService.emitNotification(
+          'Initial data import failed. Please check server logs.',
+          'error'
+        );
+      }
+    } else if (stats.success) {
+      console.log(`ℹ️ Database contains ${stats.data.total} tickets - no auto-import needed`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to check database status for auto-import:', error);
+  }
+  
+  // Debug: Log ServiceNow configuration
+  console.log('🔧 ServiceNow Configuration:');
+  console.log(`   - enablePolling: ${config.servicenow.enablePolling}`);
+  console.log(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
+  console.log(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
+  console.log(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
+  console.log(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
   
   // Initialize ServiceNow polling service if enabled
   if (config.servicenow.enablePolling) {
     try {
+      console.log('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
+      console.log('✅ ServiceNow polling service initialized successfully');
+      
+      // Reset polling status to healthy on server startup
+      console.log('🔄 Resetting polling status to healthy on startup...');
+      await pollingService.resetPollingStatus();
+      console.log('✅ Polling status reset to healthy');
     } catch (error) {
       console.error('❌ Failed to initialize ServiceNow polling service:', error);
     }
@@ -211,4 +330,4 @@ app.listen(PORT, async () => {
   }
 });
 
-module.exports = app;
+module.exports = { app, server };

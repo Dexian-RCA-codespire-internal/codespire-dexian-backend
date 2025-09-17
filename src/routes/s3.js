@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
+const { doc } = require('../utils/apiDoc');
 const {
   upload,
   uploadFile,
@@ -32,12 +33,39 @@ const presignedUrlValidation = [
   query('expiresIn').optional().isInt({ min: 60, max: 86400 }).withMessage('Expires in must be between 60 and 86400 seconds')
 ];
 
-// Routes
-router.post('/upload', authenticateToken, upload.single('file'), uploadValidation, uploadFile);
-router.get('/download/:fileName', authenticateToken, fileNameValidation, downloadFile);
-router.delete('/:fileName', authenticateToken, fileNameValidation, deleteFile);
-router.get('/list', authenticateToken, listValidation, listFiles);
-router.get('/presigned/:fileName', authenticateToken, fileNameValidation, presignedUrlValidation, getPresignedUrl);
-router.get('/metadata/:fileName', authenticateToken, fileNameValidation, getFileMetadata);
+// File Storage Routes
+router.post('/upload', 
+  doc.create('/s3/upload', 'Upload a file to S3 storage', ['File Storage'], {
+    type: 'object',
+    properties: {
+      file: {
+        type: 'string',
+        format: 'binary',
+        description: 'File to upload (multipart/form-data)'
+      }
+    },
+    required: ['file']
+  }),
+  authenticateToken, upload.single('file'), uploadValidation, uploadFile);
+
+router.get('/download/:fileName', 
+  doc.getById('/s3/download/{fileName}', 'Download a file from S3 storage', ['File Storage']),
+  authenticateToken, fileNameValidation, downloadFile);
+
+router.delete('/:fileName', 
+  doc.delete('/s3/{fileName}', 'Delete a file from S3 storage', ['File Storage']),
+  authenticateToken, fileNameValidation, deleteFile);
+
+router.get('/list', 
+  doc.getList('/s3/list', 'List files in S3 storage', ['File Storage']),
+  authenticateToken, listValidation, listFiles);
+
+router.get('/presigned/:fileName', 
+  doc.getById('/s3/presigned/{fileName}', 'Generate presigned URL for file access', ['File Storage']),
+  authenticateToken, fileNameValidation, presignedUrlValidation, getPresignedUrl);
+
+router.get('/metadata/:fileName', 
+  doc.getById('/s3/metadata/{fileName}', 'Get file metadata and information', ['File Storage']),
+  authenticateToken, fileNameValidation, getFileMetadata);
 
 module.exports = router;

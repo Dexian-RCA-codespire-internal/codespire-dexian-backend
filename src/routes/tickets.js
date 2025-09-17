@@ -1,15 +1,29 @@
-// new file servicenow
+/**
+ * Ticket Routes - Auto-documented with minimal configuration
+ * API endpoints for ticket-related operations including similarity search and CRUD operations
+ */
+
 const express = require('express');
-const router = express.Router();
 const { getTickets, getTicket, getTicketStatistics } = require('../controllers/ticketsController');
+const { doc, params } = require('../utils/apiDoc');
 
-// GET /api/v1/tickets - Fetch all tickets from MongoDB
-router.get('/', getTickets);
+const router = express.Router();
 
-// GET /api/v1/tickets/stats - Get ticket statistics
-router.get('/stats', getTicketStatistics);
+// Get all tickets with filtering and pagination
+router.get('/', 
+  doc.getList('/tickets', 'Retrieve all tickets from ServiceNow with pagination', ['Tickets']),
+  getTickets);
 
-// GET /api/v1/tickets/:ticketId - Get a specific ticket by ID
-router.get('/:ticketId', getTicket);
+// Get ticket statistics
+router.get('/stats', 
+  doc.get('/tickets/stats', 'Get aggregated statistics for all tickets in the system', ['Tickets']),
+  getTicketStatistics);
+
+// Get specific ticket by ID
+router.get('/:ticketId', 
+  doc.getById('/tickets/{ticketId}', 'Retrieve a specific ticket by its ID or ServiceNow number', ['Tickets']),
+  getTicket);
+
+
 
 module.exports = router;
