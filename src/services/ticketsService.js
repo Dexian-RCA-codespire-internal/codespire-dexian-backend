@@ -81,9 +81,30 @@ const fetchTicketsFromDB = async (options = {}) => {
       }
     }
 
-    // Add stages filter (if stages field exists in the ticket model)
+    // Add stages filter - convert RCA stages to MongoDB status values
     if (stages && stages.length > 0) {
-      filter.stage = { $in: stages };
+      const statusValues = []
+      
+      stages.forEach(stage => {
+        switch (stage) {
+          case 'New':
+            statusValues.push('New', 'Pending')
+            break
+          case 'Analysis':
+            statusValues.push('In Progress', 'Assigned')
+            break
+          case 'Resolved':
+            statusValues.push('Resolved', 'Closed')
+            break
+          case 'Closed/Cancelled':
+            statusValues.push('Cancelled', 'Closed')
+            break
+        }
+      })
+      
+      if (statusValues.length > 0) {
+        filter.status = { $in: statusValues }
+      }
     }
 
     // Add text search if query provided
