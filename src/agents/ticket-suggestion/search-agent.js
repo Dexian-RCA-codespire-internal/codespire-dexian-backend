@@ -72,11 +72,12 @@ async function generateTicketSuggestions(similarTickets, currentTicket = null) {
 function createSuggestionsPrompt(similarTickets, currentTicket = null) {
     let currentTicketInfo = '';
     if (currentTicket) {
+        const description = currentTicket.description || currentTicket.short_description;
         currentTicketInfo = `
 Current Ticket to Resolve:
 - Ticket ID: ${currentTicket.ticket_id}
 - Short Description: ${currentTicket.short_description}
-- Description: ${currentTicket.description}
+- Description: ${description}
 - Category: ${currentTicket.category}
 - Status: ${currentTicket.status}
 - Priority: ${currentTicket.priority}
@@ -86,15 +87,18 @@ Current Ticket to Resolve:
 `;
     }
 
-    const ticketsInfo = similarTickets.map((ticket, index) => `
+    const ticketsInfo = similarTickets.map((ticket, index) => {
+        const description = ticket.description || ticket.short_description;
+        return `
 ${index + 1}. Ticket ID: ${ticket.ticket_id}
    - Short Description: ${ticket.short_description}
-   - Description: ${ticket.description}
+   - Description: ${description}
    - Category: ${ticket.category}
    - Status: ${ticket.status}
    - Priority: ${ticket.priority}
    - Confidence: ${ticket.confidence_percentage}%
-`).join('\n');
+`;
+    }).join('\n');
 
     return `You are an expert IT support analyst. Based on the following similar tickets, provide 3 concise resolution suggestions for the current ticket.
 
