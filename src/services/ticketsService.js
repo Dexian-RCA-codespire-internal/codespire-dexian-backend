@@ -65,12 +65,19 @@ const fetchTicketsFromDB = async (options = {}) => {
 
     // Add date range filter
     if (dateRange && (dateRange.startDate || dateRange.endDate)) {
-      filter.opened_time = {};
-      if (dateRange.startDate) {
-        filter.opened_time.$gte = new Date(dateRange.startDate);
+      filter.createdAt = {};
+      if (dateRange.startDate && dateRange.startDate.trim() !== '') {
+        const startDate = new Date(dateRange.startDate + 'T00:00:00.000Z');
+        filter.createdAt.$gte = startDate;
       }
-      if (dateRange.endDate) {
-        filter.opened_time.$lte = new Date(dateRange.endDate);
+      if (dateRange.endDate && dateRange.endDate.trim() !== '') {
+        const endDate = new Date(dateRange.endDate + 'T23:59:59.999Z');
+        filter.createdAt.$lte = endDate;
+      }
+      // If only startDate is provided, set endDate to startDate for "today" filtering
+      if (dateRange.startDate && dateRange.startDate.trim() !== '' && (!dateRange.endDate || dateRange.endDate.trim() === '')) {
+        const endDate = new Date(dateRange.startDate + 'T23:59:59.999Z');
+        filter.createdAt.$lte = endDate;
       }
     }
 
