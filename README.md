@@ -11,7 +11,6 @@ This is a scaffolded microservice backend project created with `create-my-custom
 - LLM integration support
 - Health check endpoints
 - Basic error handling
-- Testing setup with Jest
 
 ## Getting Started
 
@@ -36,7 +35,6 @@ This is a scaffolded microservice backend project created with `create-my-custom
 
 - `npm start` - Start production server
 - `npm run dev` - Start development server with nodemon
-- `npm test` - Run tests
 
 ## Project Structure
 

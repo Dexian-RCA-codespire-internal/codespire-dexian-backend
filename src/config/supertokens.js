@@ -3,6 +3,7 @@ const EmailPassword = require('supertokens-node/recipe/emailpassword');
 const Session = require('supertokens-node/recipe/session');
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
+const Dashboard = require('supertokens-node/recipe/dashboard');
 const config = require('./index');
 const emailService = require('../services/emailService');
 
@@ -67,7 +68,7 @@ const initSuperTokens = () => {
                       const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, email);
                       
                       if (tokenRes.status === "OK") {
-                        const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
+                        const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8000'}/auth/verify-email?token=${tokenRes.token}`;
                         console.log('📧 Generated proper magic link URL:', magicLinkUrl);
                         
                         const result = await emailService.sendMagicLinkEmail(email, email, magicLinkUrl);
@@ -109,7 +110,7 @@ const initSuperTokens = () => {
                         const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, userEmail);
                         
                         if (tokenRes.status === "OK") {
-                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
+                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8000'}/auth/verify-email?token=${tokenRes.token}`;
                           console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
                           
                           const result = await emailService.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
@@ -243,6 +244,28 @@ const initSuperTokens = () => {
         cookieSameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       }),
       UserMetadata.init(),
+      Dashboard.init({
+        // No API key required for local development
+        // apiKey: config.supertokens.apiKey,
+        override: {
+          functions: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              // Allow external resources for dashboard
+              getCORSAllowedHeaders: () => {
+                return [
+                  'Content-Type',
+                  'rid',
+                  'api-key',
+                  'Authorization',
+                  'x-requested-with',
+                  'x-csrf-token'
+                ];
+              }
+            };
+          }
+        }
+      }),
     ],
   });
   console.log('✅ SuperTokens configuration completed');
