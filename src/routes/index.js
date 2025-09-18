@@ -5,9 +5,11 @@ const router = express.Router();
 const authRoutes = require('./auth');
 const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
+const chatRoutes = require('./chat');
 const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
+const ticketResolutionRoutes = require('./ticketResolution');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -16,6 +18,8 @@ router.use('/s3', s3Routes);
 router.use('/tickets', ticketsRoutes);
 router.use('/servicenow-polling', servicenowPollingRoutes);
 router.use('/ticket-similarity', ticketSimilarityRoutes);
+router.use('/tickets', ticketResolutionRoutes);
+router.use('/chat', chatRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -30,11 +34,13 @@ router.get('/', (req, res) => {
       s3: '/s3',
       tickets: '/tickets',
       servicenowPolling: '/servicenow-polling',
-      ticketSimilarity: '/ticket-similarity'
+      ticketSimilarity: '/ticket-similarity',
+      ticketResolution: '/tickets/resolve',
+       chat: '/chat'
     },
     documentation: {
       swagger: '/api/docs',
-      openapi: '/api/docs.json'
+      openapi: '/api/docs.json',
     }
   });
 });

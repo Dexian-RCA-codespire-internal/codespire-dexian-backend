@@ -11,14 +11,18 @@ const config = {
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD
   },
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL: process.env.GEMINI_MODEL,
+  GEMINI_MAX_TOKENS: process.env.GEMINI_MAX_TOKENS,
+  GEMINI_TEMPERATURE: process.env.GEMINI_TEMPERATURE,
   
   // SuperTokens configuration
   supertokens: {
     connectionURI: process.env.SUPERTOKENS_CONNECTION_URI || 'http://localhost:3567',
     apiKey: process.env.SUPERTOKENS_API_KEY,
     appName: process.env.SUPERTOKENS_APP_NAME || 'your-app-name',
-    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3001',
-    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:3001'
+    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:8081',
+    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081'
   },
 
   

@@ -62,7 +62,6 @@ const validateTicketSuggestionsRequest = [
         .isString()
         .withMessage('Short description must be a string'),
     
-    
     body('similarTickets.*.category')
         .notEmpty()
         .withMessage('Each ticket must have a category')
@@ -89,6 +88,10 @@ const validateTicketSuggestionsRequest = [
         .isString()
         .withMessage('Current ticket short description must be a string'),
 
+    body('currentTicket.description')
+        .optional()
+        .isString()
+        .withMessage('Current ticket description must be a string'),
     
     body('currentTicket.category')
         .optional()

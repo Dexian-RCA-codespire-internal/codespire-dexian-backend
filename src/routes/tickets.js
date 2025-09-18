@@ -4,7 +4,8 @@
  */
 
 const express = require('express');
-const { getTickets, getTicket, getTicketStatistics } = require('../controllers/ticketsController');
+const { getTickets, getTicket, getTicketStatistics, updateTicket } = require('../controllers/ticketsController');
+const { validateTicketUpdate, validateUpdateData } = require('../validators/ticketValidators');
 const { doc, params } = require('../utils/apiDoc');
 
 const router = express.Router();
@@ -24,6 +25,11 @@ router.get('/:ticketId',
   doc.getById('/tickets/{ticketId}', 'Retrieve a specific ticket by its ID or ServiceNow number', ['Tickets']),
   getTicket);
 
-
+// Update specific ticket by ID (MongoDB _id preferred)
+router.put('/:ticketId', 
+  doc.update('/tickets/{ticketId}', 'Update a specific ticket by its MongoDB _id (primary) or ServiceNow ticket_id (fallback)', ['Tickets']),
+  validateTicketUpdate,
+  validateUpdateData,
+  updateTicket);
 
 module.exports = router;
