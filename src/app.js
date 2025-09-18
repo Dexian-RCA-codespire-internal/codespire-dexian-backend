@@ -35,9 +35,7 @@ const PORT = process.env.PORT || 8081;
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-    'http://localhost:3001', // Frontend URL
-    'http://localhost:3002', // Frontend URL
-    'http://localhost:3000'
+    process.env.FRONTEND_URL || 'http://localhost:3001',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -176,7 +174,7 @@ app.get('/auth/verify-email', async (req, res) => {
             <div class="container">
               <h1 class="success">✅ Email Verified Successfully!</h1>
               <p>Your email has been verified. You can now log in to your account.</p>
-              <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">Go to Login Page</a></p>
+              <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}">Go to Login Page</a></p>
             </div>
           </body>
           </html>
@@ -217,7 +215,7 @@ webSocketService.initialize(server);
 
 server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  console.log(`📱 Health check: ${process.env.BACKEND_URL || `http://localhost:${PORT}`}/health`);
   console.log(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed

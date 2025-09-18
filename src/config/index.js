@@ -107,7 +107,9 @@ const config = {
       enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
       // Bulk import configuration
       enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
-      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100,
+      // Health check configuration
+      healthCheckIntervalSeconds: parseInt(process.env.SERVICENOW_HEALTH_CHECK_INTERVAL_SECONDS) || 10
     },
 
       // Output configuration
