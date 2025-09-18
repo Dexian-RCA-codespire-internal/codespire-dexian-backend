@@ -33,8 +33,9 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin', 'moderator'],
-    default: 'user'
+    enum: ['user', 'admin', 'moderator', 'support'],
+    default: 'user',
+    required: true
   },
   isEmailVerified: {
     type: Boolean,
@@ -148,6 +149,27 @@ userSchema.methods.markEmailVerified = function() {
   this.otpExpiry = undefined;
   this.magicLinkToken = undefined;
   this.magicLinkExpiry = undefined;
+};
+
+userSchema.methods.sendOTPEmail = async function() {
+  try {
+    const emailService = require('../services/emailService');
+    const otp = this.generateOTP();
+    await this.save(); // Save the OTP to database
+    
+    // Send OTP email
+    const emailResult = await emailService.sendOTPEmail(this.email, this.name, otp);
+    if (emailResult.success) {
+      console.log('✅ OTP sent successfully to user:', this.email);
+      return { success: true, otp: otp };
+    } else {
+      console.error('❌ Failed to send OTP email:', emailResult.error);
+      return { success: false, error: emailResult.error };
+    }
+  } catch (error) {
+    console.error('❌ Error sending OTP to user:', error);
+    return { success: false, error: error.message };
+  }
 };
 
 // Static methods

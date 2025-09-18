@@ -17,8 +17,8 @@ const config = {
     connectionURI: process.env.SUPERTOKENS_CONNECTION_URI || 'http://localhost:3567',
     apiKey: process.env.SUPERTOKENS_API_KEY,
     appName: process.env.SUPERTOKENS_APP_NAME || 'your-app-name',
-    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3000',
-    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:3000'
+    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3001',
+    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081'
   },
 
   
@@ -74,7 +74,7 @@ const config = {
   // Rate limiting configuration
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000
   },
 
   // Logging configuration

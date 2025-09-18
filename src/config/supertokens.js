@@ -3,6 +3,7 @@ const EmailPassword = require('supertokens-node/recipe/emailpassword');
 const Session = require('supertokens-node/recipe/session');
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
+const Passwordless = require('supertokens-node/recipe/passwordless');
 const Dashboard = require('supertokens-node/recipe/dashboard');
 const config = require('./index');
 const emailService = require('../services/emailService');
@@ -18,18 +19,74 @@ const initSuperTokens = () => {
     },
     appInfo: {
       appName: config.supertokens.appName,
-      apiDomain: config.supertokens.apiDomain,
-      websiteDomain: config.supertokens.apiDomain, // Use API domain for magic links
+      apiDomain: config.supertokens.apiDomain,      // http://localhost:8081 (backend)
+      websiteDomain: config.supertokens.appDomain,  // http://localhost:3001 (frontend)
+      // Use standard SuperTokens paths - these must match exactly
+      apiBasePath: '/auth',
+      websiteBasePath: '/auth',
     },
     recipeList: [
-      EmailVerification.init({
-        mode: 'OPTIONAL', // or 'REQUIRED' if you want to block APIs until verified
+      // Passwordless recipe for OTP functionality
+      Passwordless.init({
+        contactMethod: 'EMAIL',
+        flowType: 'USER_INPUT_CODE_AND_MAGIC_LINK', // Enables both OTP and magic link
         emailDelivery: {
           service: {
             sendEmail: async (input) => {
               try {
-                console.log('📧 SuperTokens email delivery called');
-                console.log('📧 Full input object keys:', Object.keys(input));
+                console.log('📧 SuperTokens Passwordless email delivery called');
+                console.log('📧 Input details:', {
+                  email: input.email,
+                  hasUserInputCode: !!input.userInputCode,
+                  hasUrlWithLinkCode: !!input.urlWithLinkCode,
+                  userInputCode: input.userInputCode,
+                  urlWithLinkCode: input.urlWithLinkCode,
+                  type: input.type
+                });
+                
+                const { email, userInputCode, urlWithLinkCode } = input;
+                
+                if (userInputCode) {
+                  console.log('📧 Sending OTP email to:', email, 'OTP:', userInputCode);
+                  const result = await emailService.sendOTPEmail(email, email, userInputCode);
+                  
+                  if (!result.success) {
+                    console.error('❌ OTP email failed:', result.error);
+                    throw new Error(`Failed to send OTP email: ${result.error}`);
+                  }
+                  
+                  console.log('✅ SuperTokens OTP email sent successfully');
+                } else if (urlWithLinkCode) {
+                  console.log('📧 Sending magic link email to:', email);
+                  console.log('📧 Magic link URL:', urlWithLinkCode);
+                  const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
+                  
+                  if (!result.success) {
+                    console.error('❌ Magic link email failed:', result.error);
+                    throw new Error(`Failed to send magic link email: ${result.error}`);
+                  }
+                  
+                  console.log('✅ SuperTokens magic link email sent successfully');
+                } else {
+                  console.error('❌ No userInputCode or urlWithLinkCode provided');
+                  throw new Error('No verification code or link provided');
+                }
+              } catch (error) {
+                console.error('❌ Failed to send SuperTokens Passwordless email:', error);
+                throw error;
+              }
+            },
+          },
+        },
+      }),
+      // Email verification for EmailPassword recipe
+      EmailVerification.init({
+        mode: 'REQUIRED', // REQUIRED - user must verify email before login
+        emailDelivery: {
+          service: {
+            sendEmail: async (input) => {
+              try {
+                console.log('📧 SuperTokens EmailVerification email delivery called');
                 console.log('📧 Input details:', {
                   email: input.email,
                   hasUserInputCode: !!input.userInputCode,
@@ -41,11 +98,9 @@ const initSuperTokens = () => {
                 });
                 const { email, userInputCode, urlWithLinkCode } = input;
                 
-                // Force magic link instead of OTP
                 if (urlWithLinkCode) {
                   console.log('📧 Sending magic link email to:', email);
                   console.log('📧 Magic link URL:', urlWithLinkCode);
-                  // Send magic link email
                   const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
                   
                   if (!result.success) {
@@ -55,51 +110,22 @@ const initSuperTokens = () => {
                   
                   console.log('✅ SuperTokens magic link email sent successfully');
                 } else if (userInputCode) {
-                  console.log('📧 OTP received but we want magic links. Generating magic link for:', email);
-                  // Generate a proper magic link using SuperTokens
-                  try {
-                    const EmailVerification = require('supertokens-node/recipe/emailverification');
-                    const supertokens = require('supertokens-node');
-                    
-                    // Get user ID from the input (if available)
-                    const userId = input.userId || input.user?.id;
-                    if (userId) {
-                      const recipeUserId = new supertokens.RecipeUserId(userId);
-                      const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, email);
-                      
-                      if (tokenRes.status === "OK") {
-                        const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8000'}/auth/verify-email?token=${tokenRes.token}`;
-                        console.log('📧 Generated proper magic link URL:', magicLinkUrl);
-                        
-                        const result = await emailService.sendMagicLinkEmail(email, email, magicLinkUrl);
-                        
-                        if (!result.success) {
-                          console.error('❌ Magic link email failed:', result.error);
-                          throw new Error(`Failed to send magic link email: ${result.error}`);
-                        }
-                        
-                        console.log('✅ SuperTokens magic link email sent successfully (generated from OTP)');
-                      } else {
-                        console.error('❌ Failed to create email verification token');
-                        throw new Error('Failed to create email verification token');
-                      }
-                    } else {
-                      console.error('❌ No user ID available to generate magic link');
-                      throw new Error('No user ID available to generate magic link');
-                    }
-                  } catch (error) {
-                    console.error('❌ Error generating magic link:', error);
-                    throw error;
+                  console.log('📧 Sending OTP email to:', email, 'OTP:', userInputCode);
+                  const result = await emailService.sendOTPEmail(email, email, userInputCode);
+                  
+                  if (!result.success) {
+                    console.error('❌ OTP email failed:', result.error);
+                    throw new Error(`Failed to send OTP email: ${result.error}`);
                   }
+                  
+                  console.log('✅ SuperTokens OTP email sent successfully');
                 } else {
                   console.log('⚠️ No userInputCode or urlWithLinkCode provided');
                   console.log('📧 Attempting to extract email from user object or other fields');
                   
-                  // Try to get email from user object or other fields
                   const userEmail = input.user?.email || input.email || input.user?.id;
                   if (userEmail) {
                     console.log('📧 Found email in user object:', userEmail);
-                    // Generate a magic link for this user
                     try {
                       const EmailVerification = require('supertokens-node/recipe/emailverification');
                       const supertokens = require('supertokens-node');
@@ -110,7 +136,7 @@ const initSuperTokens = () => {
                         const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, userEmail);
                         
                         if (tokenRes.status === "OK") {
-                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8000'}/auth/verify-email?token=${tokenRes.token}`;
+                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/verify-email?token=${tokenRes.token}`;
                           console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
                           
                           const result = await emailService.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
@@ -178,12 +204,12 @@ const initSuperTokens = () => {
               signUpPOST: async function (input) {
                 // Call the original signup
                 const response = await originalImplementation.signUpPOST(input);
-                
+                console.log(response)
                 // If signup was successful, create user in our database
                 if (response.status === 'OK') {
                   try {
                     const User = require('../models/User');
-                    const SuperTokensOTPService = require('../services/supertokensOTPService');
+                    // SuperTokensOTPService removed - using built-in email verification
                     
                     // Extract form fields from the request
                     const formFields = input.formFields || [];
@@ -204,7 +230,7 @@ const initSuperTokens = () => {
                                     email;
                     
                     // Create user in our database
-                    await User.createUser(
+                    const createdUser = await User.createUser(
                       response.user.id,
                       email,
                       fullName,
@@ -213,16 +239,16 @@ const initSuperTokens = () => {
                       phone
                     );
                     
-                    // Send OTP email for verification
+                    // Generate and send OTP for email verification
                     try {
-                      const otpResult = await SuperTokensOTPService.sendOTP(email);
+                      const otpResult = await createdUser.sendOTPEmail();
                       if (otpResult.success) {
-                        console.log('✅ OTP sent during SuperTokens signup');
+                        console.log('✅ OTP sent successfully to new user:', email);
                       } else {
-                        console.error('Failed to send OTP during SuperTokens signup:', otpResult.error);
+                        console.error('❌ Failed to send OTP email:', otpResult.error);
                       }
                     } catch (otpError) {
-                      console.error('Error sending OTP during SuperTokens signup:', otpError);
+                      console.error('❌ Error sending OTP to new user:', otpError);
                     }
                     
                     console.log('✅ User created in database via SuperTokens signup');
@@ -242,11 +268,78 @@ const initSuperTokens = () => {
         cookieDomain: process.env.NODE_ENV === 'production' ? config.supertokens.appDomain : undefined,
         cookieSecure: process.env.NODE_ENV === 'production',
         cookieSameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        sessionExpiredStatusCode: 401,
+        invalidClaimStatusCode: 403,
+        // Enable single session per user
+        useDynamicAccessTokenSigningKey: true,
+        override: {
+          functions: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              createNewSession: async function (input) {
+                console.log('🔐 Creating session for user:', input.userId);
+                
+                // Terminate existing sessions for this user (single session enforcement)
+                try {
+                  const Session = require('supertokens-node/recipe/session');
+                  const existingSessions = await Session.getAllSessionHandlesForUser(input.userId);
+                  if (existingSessions && existingSessions.length > 0) {
+                    console.log(`🔄 Terminating ${existingSessions.length} existing sessions for user:`, input.userId);
+                    for (const sessionHandle of existingSessions) {
+                      await Session.revokeSession(sessionHandle);
+                    }
+                  }
+                } catch (error) {
+                  console.log('⚠️ Error terminating existing sessions:', error.message);
+                }
+                
+                // Create new session with user role
+                const session = await originalImplementation.createNewSession(input);
+                
+                // Add user role to session
+                try {
+                  const User = require('../models/User');
+                  const dbUser = await User.findOne({ supertokensUserId: input.userId });
+                  if (dbUser) {
+                    await session.updateAccessTokenPayload({
+                      role: dbUser.role || 'user', // Default role is 'user'
+                      email: dbUser.email,
+                      name: dbUser.name
+                    });
+                    console.log('✅ Added role to session:', dbUser.role || 'user');
+                  } else {
+                    // If user not found in database, set default role
+                    await session.updateAccessTokenPayload({
+                      role: 'user', // Default role
+                      email: input.userEmail || '',
+                      name: input.userName || ''
+                    });
+                    console.log('✅ Added default role to session: user');
+                  }
+                } catch (error) {
+                  console.log('⚠️ Error adding role to session:', error.message);
+                  // Set default role even if there's an error
+                  try {
+                    await session.updateAccessTokenPayload({
+                      role: 'user',
+                      email: input.userEmail || '',
+                      name: input.userName || ''
+                    });
+                  } catch (payloadError) {
+                    console.log('⚠️ Error setting default role:', payloadError.message);
+                  }
+                }
+                
+                return session;
+              }
+            };
+          }
+        }
       }),
       UserMetadata.init(),
       Dashboard.init({
-        // No API key required for local development
-        // apiKey: config.supertokens.apiKey,
+        // Protect dashboard with API key
+        apiKey: process.env.SUPERTOKENS_API_KEY,
         override: {
           functions: (originalImplementation) => {
             return {
@@ -274,4 +367,13 @@ const initSuperTokens = () => {
 module.exports = {
   initSuperTokens,
   supertokens,
+  config: {
+    supertokens: {
+      connectionURI: config.supertokens.connectionURI,
+      apiKey: config.supertokens.apiKey
+    },
+    appName: config.supertokens.appName,
+    apiDomain: config.supertokens.apiDomain,      // http://localhost:8081
+    websiteDomain: config.supertokens.appDomain,  // http://localhost:3001
+  }
 };
