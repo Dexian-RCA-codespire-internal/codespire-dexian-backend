@@ -8,6 +8,7 @@ const { doc } = require('../utils/apiDoc');
 const router = express.Router();
 const {
   getPollingStatus,
+  performHealthCheck,
   startPolling,
   stopPolling,
   triggerManualPoll,
@@ -24,6 +25,10 @@ const {
 router.get('/status', 
   doc.get('/servicenow-polling/status', 'Get current status of ServiceNow polling service', ['ServiceNow', 'Polling']),
   getPollingStatus);
+
+router.get('/health-check', 
+  doc.get('/servicenow-polling/health-check', 'Perform immediate ServiceNow health check (credentials + connectivity)', ['ServiceNow', 'Health']),
+  performHealthCheck);
 
 router.post('/start', 
   doc.post('/servicenow-polling/start', 'Start the ServiceNow ticket polling service', ['ServiceNow', 'Polling']),
