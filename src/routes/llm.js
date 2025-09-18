@@ -5,11 +5,6 @@ const { doc } = require('../utils/apiDoc');
 const router = express.Router();
 const llmController = new LLMController();
 
-// Test all LLM service connections
-router.get('/test', 
-  doc.get('/llm/test', 'Test connectivity to all configured LLM services', ['LLM Services']),
-  llmController.testConnections.bind(llmController));
-
 // Get available LLM services
 router.get('/services', 
   doc.get('/llm/services', 'Get list of available LLM services and their status', ['LLM Services']),

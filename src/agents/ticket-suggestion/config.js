@@ -27,11 +27,11 @@ const config = defaultConfig.createRAGAgentConfig('ticket-suggestion', {
             'ticket_id',
             'source', 
             'short_description',
-            'description',
             'category',
             'confidence_score'
         ],
         optionalFields: [
+            'description',
             'subcategory',
             'status',
             'priority',

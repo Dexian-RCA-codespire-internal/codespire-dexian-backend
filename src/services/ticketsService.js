@@ -290,8 +290,81 @@ const getTicketStats = async (source = 'ServiceNow') => {
   }
 };
 
+/**
+ * Update a ticket by ID
+ * @param {String} ticketId - MongoDB ObjectId (primary) or Ticket ID (fallback)
+ * @param {Object} updateData - Data to update
+ * @param {String} source - Source (default: ServiceNow)
+ * @returns {Object} Result object with updated ticket data
+ */
+const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => {
+  try {
+    console.log(`📝 Updating ticket ${ticketId} in MongoDB...`);
+    
+    // First, try finding by MongoDB ObjectId (primary method)
+    let ticket = await Ticket.findById(ticketId);
+    
+    if (!ticket) {
+      // Fallback: try finding by ticket_id and source
+      ticket = await Ticket.findOne({ 
+        ticket_id: ticketId, 
+        source: source 
+      });
+    }
+
+    if (!ticket) {
+      return {
+        success: false,
+        error: 'Ticket not found',
+        data: null
+      };
+    }
+
+    // Remove fields that shouldn't be updated directly
+    const { _id, ticket_id, source: ticketSource, createdAt, updatedAt, ...allowedUpdates } = updateData;
+    
+    // Update the ticket
+    const updatedTicket = await Ticket.findByIdAndUpdate(
+      ticket._id,
+      { 
+        ...allowedUpdates,
+        updatedAt: new Date()
+      },
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    ).lean();
+
+    if (!updatedTicket) {
+      return {
+        success: false,
+        error: 'Failed to update ticket',
+        data: null
+      };
+    }
+
+    console.log(`✅ Updated ticket: ${updatedTicket.ticket_id}`);
+
+    return {
+      success: true,
+      message: 'Ticket updated successfully',
+      data: updatedTicket
+    };
+
+  } catch (error) {
+    console.error(`❌ Error updating ticket ${ticketId}:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      data: null
+    };
+  }
+};
+
 module.exports = {
   fetchTicketsFromDB,
   getTicketById,
-  getTicketStats
+  getTicketStats,
+  updateTicketById
 };

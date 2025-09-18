@@ -1,5 +1,5 @@
 // new file servicenow
-const { fetchTicketsFromDB, getTicketById, getTicketStats } = require('../services/ticketsService');
+const { fetchTicketsFromDB, getTicketById, getTicketStats, updateTicketById } = require('../services/ticketsService');
 
 /**
  * Fetch tickets from MongoDB database
@@ -151,8 +151,60 @@ const getTicketStatistics = async (req, res) => {
   }
 };
 
+/**
+ * Update a ticket by ID (accepts MongoDB _id as primary identifier)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const updateTicket = async (req, res) => {
+  try {
+    const { ticketId } = req.params; // This can be MongoDB _id or ticket_id
+    const { source } = req.query;
+    const updateData = req.body;
+    
+    if (!ticketId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket ID (MongoDB _id) is required'
+      });
+    }
+
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Update data is required'
+      });
+    }
+
+    const result = await updateTicketById(ticketId, updateData, source);
+    
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result.data
+      });
+    } else {
+      const statusCode = result.error === 'Ticket not found' ? 404 : 500;
+      res.status(statusCode).json({
+        success: false,
+        message: result.error,
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Error updating ticket:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getTickets,
   getTicket,
-  getTicketStatistics
+  getTicketStatistics,
+  updateTicket
 };

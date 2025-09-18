@@ -5,27 +5,6 @@ class LLMController {
     this.llmManager = new LLMManager();
   }
 
-  async testConnections(req, res) {
-    try {
-      const results = {};
-      const services = this.llmManager.getAvailableServices();
-      
-      for (const service of services) {
-        results[service] = await this.llmManager.testConnection(service);
-      }
-      
-      res.json({
-        success: true,
-        results
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  }
-
   async generateResponse(req, res) {
     try {
       const { service, prompt, options } = req.body;
