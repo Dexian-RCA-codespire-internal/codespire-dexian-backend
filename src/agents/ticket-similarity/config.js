@@ -9,7 +9,7 @@ const { config: defaultConfig } = require('../shared');
 const config = defaultConfig.createRAGAgentConfig('ticket-similarity', {
     // Vector database settings
     vectorDb: {
-        collectionName: 'ticket',  // Keep existing collection name
+        collectionName: 'rcaresolved',  // Use RCA resolved collection
         vectorSize: 768,           // Gemini embedding size
         topK: 20                   // Initial retrieval count
     },

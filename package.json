@@ -9,7 +9,9 @@
     "test": "jest",
     "test:connections": "node src/utils/testConnections.js",
     "upload:tickets": "node scripts/upload-tickets-to-qdrant.js",
-    "test:upload": "node scripts/test-upload-process.js"
+    "test:upload": "node scripts/test-upload-process.js",
+    "test:gemini": "node scripts/test-gemini-connection.js",
+    "test:qdrant": "node scripts/test-qdrant-connection.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.9.1",
