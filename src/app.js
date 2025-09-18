@@ -23,7 +23,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
-const config = require('./config');
+const appConfig = require('./config');
 
 
 const app = express();
@@ -562,8 +562,8 @@ server.listen(PORT, async () => {
   console.log(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed
-  console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
-  if (config.servicenow.enableBulkImport) {
+  console.log(`🔧 ServiceNow URL: ${appConfig.servicenow.url || 'Not configured'}`);
+  if (appConfig.servicenow.enableBulkImport) {
     try {
       // Check if bulk import has already been completed
       const alreadyCompleted = await hasCompletedBulkImport();
@@ -577,7 +577,7 @@ server.listen(PORT, async () => {
       } else {
         console.log('🔄 Starting ServiceNow bulk import (first time setup)...');
         const result = await bulkImportAllTickets({
-          batchSize: config.servicenow.bulkImportBatchSize
+          batchSize: appConfig.servicenow.bulkImportBatchSize
         });
         
         if (result.success) {
@@ -646,14 +646,14 @@ server.listen(PORT, async () => {
   
   // Debug: Log ServiceNow configuration
   console.log('🔧 ServiceNow Configuration:');
-  console.log(`   - enablePolling: ${config.servicenow.enablePolling}`);
-  console.log(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
-  console.log(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
-  console.log(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
-  console.log(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
+  console.log(`   - enablePolling: ${appConfig.servicenow.enablePolling}`);
+  console.log(`   - pollingInterval: ${appConfig.servicenow.pollingInterval}`);
+  console.log(`   - url: ${appConfig.servicenow.url ? 'Set' : 'Not set'}`);
+  console.log(`   - username: ${appConfig.servicenow.username ? 'Set' : 'Not set'}`);
+  console.log(`   - enableBulkImport: ${appConfig.servicenow.enableBulkImport}`);
   
   // Initialize ServiceNow polling service if enabled
-  if (config.servicenow.enablePolling) {
+  if (appConfig.servicenow.enablePolling) {
     try {
       console.log('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
@@ -674,4 +674,4 @@ server.listen(PORT, async () => {
 // SuperTokens error handler (must be last)
 app.use(errorHandler());
 
-module.exports = { app, server };
+module.exports = app;
