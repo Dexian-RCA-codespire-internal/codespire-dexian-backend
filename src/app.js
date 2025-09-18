@@ -35,9 +35,16 @@ const PORT = process.env.PORT || 8081;
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-    'http://localhost:3001',
+    'http://localhost:3001', // Frontend URL
+    'http://localhost:3002', // Frontend URL
+    'http://localhost:3000'
   ],
-  credentials: process.env.CORS_CREDENTIALS === 'true' || true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 app.use(morgan('combined'));
 app.use(express.json());
@@ -49,7 +56,7 @@ app.use(middleware());
 
 // Debug: Log all incoming requests
 app.use((req, res, next) => {
-  console.log(`🔍 ${req.method} ${req.path}`);
+  console.log(`🔍 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'}`);
   next();
 });
 
