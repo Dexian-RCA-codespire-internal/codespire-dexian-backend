@@ -235,6 +235,16 @@ async function searchSimilarTickets(queryTicket, options = {}) {
                 company: candidateTicket.company,
                 location: candidateTicket.location,
                 tags: candidateTicket.tags,
+                // Resolution-related fields
+                root_cause: candidateTicket.root_cause,
+                resolution_analysis: candidateTicket.resolution_analysis,
+                customer_summary: candidateTicket.customer_summary,
+                problem_statement: candidateTicket.problem_statement,
+                close_code: candidateTicket.close_code,
+                resolved_by: candidateTicket.resolved_by,
+                resolution_method: candidateTicket.resolution_method,
+                close_notes: candidateTicket.close_notes,
+                work_notes: candidateTicket.work_notes,
                 confidence_score: Math.round(confidence_score * 100) / 100,
                 semantic_score: Math.round(semanticScore * 100) / 100,
                 field_similarities: fieldSimilarities
@@ -298,7 +308,8 @@ function applyBusinessRules(results, queryTicket, options = {}) {
     return filteredResults.map((ticket, index) => ({
         ...ticket,
         rank: index + 1,
-        confidence_percentage: Math.round(ticket.confidence_score * 100)
+        confidence_percentage: Math.round(ticket.confidence_score * 100),
+        confidence_score: ticket.confidence_score // Ensure confidence_score is available for AI suggestions
     }));
 }
 

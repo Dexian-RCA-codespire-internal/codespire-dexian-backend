@@ -69,7 +69,17 @@ const config = defaultConfig.createRAGAgentConfig('ticket-suggestion', {
             'semantic_score',
             'field_similarities',
             'rank',
-            'confidence_percentage'
+            'confidence_percentage',
+            // Resolution-related fields
+            'root_cause',
+            'resolution_analysis',
+            'customer_summary',
+            'problem_statement',
+            'close_code',
+            'resolved_by',
+            'resolution_method',
+            'close_notes',
+            'work_notes'
         ]
     },
     
