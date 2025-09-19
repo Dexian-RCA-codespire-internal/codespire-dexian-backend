@@ -5,6 +5,7 @@ const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
 const Passwordless = require('supertokens-node/recipe/passwordless');
 const Dashboard = require('supertokens-node/recipe/dashboard');
+const UserRoles = require('supertokens-node/recipe/userroles');
 const config = require('./index');
 const emailService = require('../services/emailService');
 
@@ -302,26 +303,26 @@ const initSuperTokens = () => {
                   const dbUser = await User.findOne({ supertokensUserId: input.userId });
                   if (dbUser) {
                     await session.updateAccessTokenPayload({
-                      role: dbUser.role || 'user', // Default role is 'user'
+                      role: dbUser.role || 'admin', // Default role is 'admin'
                       email: dbUser.email,
                       name: dbUser.name
                     });
-                    console.log('✅ Added role to session:', dbUser.role || 'user');
+                    console.log('✅ Added role to session:', dbUser.role || 'admin');
                   } else {
                     // If user not found in database, set default role
                     await session.updateAccessTokenPayload({
-                      role: 'user', // Default role
+                      role: 'admin', // Default role
                       email: input.userEmail || '',
                       name: input.userName || ''
                     });
-                    console.log('✅ Added default role to session: user');
+                    console.log('✅ Added default role to session: admin');
                   }
                 } catch (error) {
                   console.log('⚠️ Error adding role to session:', error.message);
                   // Set default role even if there's an error
                   try {
                     await session.updateAccessTokenPayload({
-                      role: 'user',
+                      role: 'admin',
                       email: input.userEmail || '',
                       name: input.userName || ''
                     });
@@ -337,6 +338,7 @@ const initSuperTokens = () => {
         }
       }),
       UserMetadata.init(),
+      UserRoles.init(),
       Dashboard.init({
         // Protect dashboard with API key
         apiKey: process.env.SUPERTOKENS_API_KEY,

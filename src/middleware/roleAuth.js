@@ -1,4 +1,5 @@
 const { verifySession } = require('supertokens-node/recipe/session/framework/express');
+const UserRoles = require('supertokens-node/recipe/userroles');
 
 /**
  * Middleware to check if user has required role
@@ -17,21 +18,28 @@ const requireRole = (requiredRoles) => {
     async (req, res, next) => {
       try {
         const session = req.session;
-        const userRole = session.getAccessTokenPayload().role;
+        const userId = session.getUserId();
         
-        console.log(`🔐 Role check - Required: [${roles.join(', ')}], User has: ${userRole}`);
+        // Get user roles from SuperTokens UserRoles recipe
+        const userRolesResponse = await UserRoles.getRolesForUser("public", userId);
+        const userRoles = userRolesResponse.roles || [];
         
-        if (!roles.includes(userRole)) {
-          console.log(`❌ Access denied - User role '${userRole}' not in required roles: [${roles.join(', ')}]`);
+        console.log(`🔐 Role check - Required: [${roles.join(', ')}], User has: [${userRoles.join(', ')}]`);
+        
+        // Check if user has any of the required roles
+        const hasRequiredRole = roles.some(role => userRoles.includes(role));
+        
+        if (!hasRequiredRole) {
+          console.log(`❌ Access denied - User roles [${userRoles.join(', ')}] not in required roles: [${roles.join(', ')}]`);
           return res.status(403).json({
             success: false,
             error: 'Insufficient permissions',
             message: `Access denied. Required role(s): ${roles.join(' or ')}`,
-            userRole: userRole
+            userRoles: userRoles
           });
         }
         
-        console.log(`✅ Access granted - User role '${userRole}' is authorized`);
+        console.log(`✅ Access granted - User roles [${userRoles.join(', ')}] include required role`);
         next();
       } catch (error) {
         console.error('❌ Role check error:', error);
@@ -68,18 +76,24 @@ const getUserRole = [
   async (req, res, next) => {
     try {
       const session = req.session;
-      const userRole = session.getAccessTokenPayload().role;
+      const userId = session.getUserId();
+      
+      // Get user roles from SuperTokens UserRoles recipe
+      const userRolesResponse = await UserRoles.getRolesForUser("public", userId);
+      const userRoles = userRolesResponse.roles || [];
       const userEmail = session.getAccessTokenPayload().email;
       const userName = session.getAccessTokenPayload().name;
       
-      req.userRole = userRole;
+      req.userRoles = userRoles;
+      req.userRole = userRoles[0] || null; // For backward compatibility
       req.userEmail = userEmail;
       req.userName = userName;
       
-      console.log(`👤 User info - Role: ${userRole}, Email: ${userEmail}, Name: ${userName}`);
+      console.log(`👤 User info - Roles: [${userRoles.join(', ')}], Email: ${userEmail}, Name: ${userName}`);
       next();
     } catch (error) {
       console.error('❌ Get user role error:', error);
+      req.userRoles = [];
       req.userRole = null;
       req.userEmail = null;
       req.userName = null;
