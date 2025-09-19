@@ -7,6 +7,7 @@ const axios = require('axios');
 const config = require('../config');
 const RCAResolved = require('../models/RCAResolved');
 const { servicenow } = require('../constants');
+const ticketVectorizationService = require('./ticketVectorizationService');
 
 class ServiceNowResolutionService {
     constructor() {
@@ -162,6 +163,18 @@ class ServiceNowResolutionService {
             // Save to database
             await rcaResolution.save();
             console.log(`✅ RCA resolution saved to database: ${rcaResolution._id}`);
+
+            // Vectorize and store in Qdrant for similarity search
+            try {
+                const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticket, rcaResolution._id);
+                if (vectorResult.success) {
+                    console.log(`✅ Resolved ticket vectorized and stored in Qdrant: ${ticket.ticket_id}`);
+                } else {
+                    console.log(`⚠️ Failed to vectorize resolved ticket ${ticket.ticket_id}: ${vectorResult.reason || vectorResult.error}`);
+                }
+            } catch (vectorError) {
+                console.error(`❌ Error vectorizing resolved ticket ${ticket.ticket_id}:`, vectorError.message);
+            }
 
             // Update ServiceNow if sys_id is available
             if (ticket.raw?.sys_id) {
