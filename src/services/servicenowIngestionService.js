@@ -3,6 +3,7 @@ const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
 const { webSocketService } = require('./websocketService');
+const { notificationService } = require('./notificationService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
 
@@ -250,7 +251,18 @@ const fetchTicketsAndSave = async (options = {}) => {
             savedCount++;
             isNewTicket = true;
             // Emit WebSocket event for new ticket
-          webSocketService.emitNewTicket(newTicket.toObject());
+            webSocketService.emitNewTicket(newTicket.toObject());
+            // Persist notification for new ticket
+            await notificationService.createAndBroadcast({
+              title: "New ticket",
+              message: `Ticket ${ticketData.number} created`,
+              type: "success",
+              related: {
+                ticketMongoId: savedTicket._id,
+                ticket_id: ticketData.number,
+                eventType: "new_ticket"
+              }
+            });
             console.log(`✅ Created new ticket: ${ticketData.number}`);
           } catch (saveError) {
             console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
@@ -259,14 +271,47 @@ const fetchTicketsAndSave = async (options = {}) => {
         } else {
           // Update existing ticket with timeout handling
           try {
+            // Check if there are actual changes to avoid unnecessary notifications
+            const hasChanges = 
+              existingTicket.status !== ticketDoc.status ||
+              existingTicket.description !== ticketDoc.description ||
+              existingTicket.priority !== ticketDoc.priority ||
+              existingTicket.assigned_to?.id !== ticketDoc.assigned_to?.id ||
+              existingTicket.assignment_group?.id !== ticketDoc.assignment_group?.id ||
+              JSON.stringify(existingTicket.updatedAt) !== JSON.stringify(new Date(ticketData.sys_updated_on || new Date()));
+
+            if (!hasChanges) {
+              // No real changes detected, skip update and notification
+              console.log(`⏭️ No changes detected for ticket: ${ticketData.number}`);
+              continue;
+            }
+
+            const previousStatus = existingTicket.status;
             savedTicket = await Ticket.findOneAndUpdate(
               { ticket_id: ticketData.number, source: 'ServiceNow' },
               ticketDoc,
               { new: true, maxTimeMS: 10000 }
             );
             updatedCount++;
+            
             // Emit WebSocket event for updated ticket
-          webSocketService.emitUpdatedTicket(savedTicket.toObject());
+            webSocketService.emitUpdatedTicket(savedTicket.toObject());
+            
+            // Persist notification for updated ticket ONLY if there are real changes
+            if (previousStatus !== ticketDoc.status) {
+              // Status changed
+              await notificationService.createAndBroadcast({
+                title: "Ticket status changed",
+                message: `Ticket ${ticketData.number} status: ${previousStatus} → ${ticketDoc.status}`,
+                type: "info",
+                related: {
+                  ticketMongoId: savedTicket._id,
+                  ticket_id: ticketData.number,
+                  eventType: "status_changed"
+                }
+              });
+            } 
+
             console.log(`✅ Updated existing ticket: ${ticketData.number}`);
           } catch (updateError) {
             console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
@@ -458,11 +503,23 @@ const bulkImportAllTickets = async (options = {}) => {
         if (!existingTicket) {
           // Create new ticket
           try {
-          const newTicket = new Ticket(ticketDoc);
-          savedTicket = await newTicket.save();
-          savedCount++;
-          isNewTicket = true;// Emit WebSocket event for new ticket
-          webSocketService.emitNewTicket(newTicket.toObject());
+            const newTicket = new Ticket(ticketDoc);
+            savedTicket = await newTicket.save();
+            savedCount++;
+            isNewTicket = true;
+            // Emit WebSocket event for new ticket
+            webSocketService.emitNewTicket(newTicket.toObject());
+            // Persist notification for new ticket
+            await notificationService.createAndBroadcast({
+              title: "New ticket",
+              message: `Ticket ${ticketData.number} created`,
+              type: "success",
+              related: {
+                ticketMongoId: savedTicket._id,
+                ticket_id: ticketData.number,
+                eventType: "new_ticket"
+              }
+            });
         } catch (saveError) {
           console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
           throw saveError;

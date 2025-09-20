@@ -10,6 +10,8 @@ const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
 const ticketResolutionRoutes = require('./ticketResolution');
+const notificationsRoutes = require('./notifications');
+
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -20,6 +22,7 @@ router.use('/servicenow-polling', servicenowPollingRoutes);
 router.use('/ticket-similarity', ticketSimilarityRoutes);
 router.use('/tickets', ticketResolutionRoutes);
 router.use('/chat', chatRoutes);
+router.use('/notifications', notificationsRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -36,7 +39,8 @@ router.get('/', (req, res) => {
       servicenowPolling: '/servicenow-polling',
       ticketSimilarity: '/ticket-similarity',
       ticketResolution: '/tickets/resolve',
-       chat: '/chat'
+      chat: '/chat',
+      notifications: '/notifications'
     },
     documentation: {
       swagger: '/api/docs',
