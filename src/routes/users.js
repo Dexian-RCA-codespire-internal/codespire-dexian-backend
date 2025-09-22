@@ -77,6 +77,51 @@ router.get('/profile', getUserRole, userController.getUserProfile);
 
 /**
  * @swagger
+ * /api/v1/users/verify-session:
+ *   get:
+ *     summary: Verify current session and get user info
+ *     description: Verify the current session and return detailed user information including roles and permissions
+ *     tags: [Users]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Session verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     session:
+ *                       type: object
+ *                       properties:
+ *                         userId:
+ *                           type: string
+ *                         sessionHandle:
+ *                           type: string
+ *                         isValid:
+ *                           type: boolean
+ *                         accessTokenPayload:
+ *                           type: object
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized - Invalid or expired session
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/verify-session', userController.verifySession);
+
+/**
+ * @swagger
  * /api/v1/users:
  *   get:
  *     summary: Get all users (Admin only)
@@ -493,5 +538,54 @@ router.delete('/:userId', requireAdmin, userController.deleteUser);
  *         description: Internal server error
  */
 router.put('/:userId/role', requireAdmin, userController.updateUserRole);
+
+/**
+ * @swagger
+ * /api/v1/users/sessions/{sessionHandle}:
+ *   delete:
+ *     summary: Revoke user session
+ *     description: Revoke a specific user session by session handle (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sessionHandle
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Session handle to revoke
+ *     responses:
+ *       200:
+ *         description: Session revoked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Session revoked successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     revokedSessionHandle:
+ *                       type: string
+ *                     revokedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Bad request - Session handle required or session not found
+ *       401:
+ *         description: Unauthorized - Invalid or missing authentication
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ *       500:
+ *         description: Internal server error
+ */
+router.delete('/sessions/:sessionHandle', requireAdmin, userController.revokeUserSession);
 
 module.exports = router;

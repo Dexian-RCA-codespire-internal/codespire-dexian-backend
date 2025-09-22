@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Minimal User model - most data will be stored in SuperTokens UserMetadata
 const userSchema = new mongoose.Schema({
   supertokensUserId: {
     type: String,
@@ -7,70 +8,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  firstName: {
-    type: String,
-    trim: true
-  },
-  lastName: {
-    type: String,
-    trim: true
-  },
-  phone: {
-    type: String,
-    trim: true
-  },
-  role: {
-    type: String,
-    enum: ['user', 'admin', 'moderator', 'support'],
-    default: 'admin',
-    required: true
-  },
-  isEmailVerified: {
-    type: Boolean,
-    default: false
-  },
-  emailVerificationOTP: {
-    code: String,
-    expiresAt: Date
-  },
-  passwordResetOTP: {
-    code: String,
-    expiresAt: Date
-  },
-  passwordResetToken: {
-    token: String,
-    expiresAt: Date
-  },
-  otp: {
-    type: String
-  },
-  otpExpiry: {
-    type: Date
-  },
-  magicLinkToken: {
-    type: String
-  },
-  magicLinkExpiry: {
-    type: Date
-  },
+  // Keep only essential fields that might need complex querying in MongoDB
+  // Everything else will be stored in SuperTokens UserMetadata
   lastLoginAt: {
     type: Date
   },
-  profilePicture: {
-    type: String
-  },
+  // Keep preferences in MongoDB for complex queries
   preferences: {
     theme: {
       type: String,
@@ -87,120 +30,37 @@ const userSchema = new mongoose.Schema({
         default: true
       }
     }
-  },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'suspended'],
-    default: 'active'
   }
 }, {
   timestamps: true
 });
 
 // Indexes
-userSchema.index({ email: 1 });
 userSchema.index({ supertokensUserId: 1 });
 userSchema.index({ createdAt: -1 });
 
 // Instance methods
 userSchema.methods.toJSON = function() {
-  const user = this.toObject();
-  delete user.emailVerificationOTP;
-  return user;
+  return this.toObject();
 };
 
-userSchema.methods.generateOTP = function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const config = require('../config');
-  const expiresAt = new Date(Date.now() + config.otp.expiryMinutes * 60 * 1000);
-  
-  this.emailVerificationOTP = {
-    code: otp,
-    expiresAt: expiresAt
-  };
-  
-  // Also set the otp field for SuperTokensOTPService compatibility
-  this.otp = otp;
-  this.otpExpiry = expiresAt;
-  
-  return otp;
-};
-
-userSchema.methods.verifyOTP = function(otp) {
-  // Check both emailVerificationOTP and otp fields for compatibility
-  const otpCode = this.emailVerificationOTP?.code || this.otp;
-  const otpExpiry = this.emailVerificationOTP?.expiresAt || this.otpExpiry;
-  
-  if (!otpCode) {
-    return false;
-  }
-  
-  if (otpExpiry && new Date() > otpExpiry) {
-    return false;
-  }
-  
-  return otpCode === otp;
-};
-
-userSchema.methods.markEmailVerified = function() {
-  this.isEmailVerified = true;
-  this.emailVerificationOTP = undefined;
-  this.otp = undefined;
-  this.otpExpiry = undefined;
-  this.magicLinkToken = undefined;
-  this.magicLinkExpiry = undefined;
-};
-
-userSchema.methods.sendOTPEmail = async function() {
-  try {
-    const emailService = require('../services/emailService');
-    const otp = this.generateOTP();
-    await this.save(); // Save the OTP to database
-    
-    // Send OTP email
-    const emailResult = await emailService.sendOTPEmail(this.email, this.name, otp);
-    if (emailResult.success) {
-      console.log('✅ OTP sent successfully to user:', this.email);
-      return { success: true, otp: otp };
-    } else {
-      console.error('❌ Failed to send OTP email:', emailResult.error);
-      return { success: false, error: emailResult.error };
-    }
-  } catch (error) {
-    console.error('❌ Error sending OTP to user:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Static methods
-userSchema.statics.findByEmail = function(email) {
-  return this.findOne({ email: email.toLowerCase() });
-};
-
+// Static methods to work with SuperTokens
 userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
   return this.findOne({ supertokensUserId });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
-  const user = new this({
+userSchema.statics.createUser = async function(supertokensUserId, preferences = {}) {
+  return this.create({
     supertokensUserId,
-    email: email.toLowerCase(),
-    name,
-    firstName,
-    lastName,
-    phone
+    preferences: {
+      theme: preferences.theme || 'light',
+      notifications: {
+        email: preferences.notifications?.email !== false,
+        push: preferences.notifications?.push !== false
+      }
+    }
   });
-  
-  return await user.save();
 };
-
-// Pre-save middleware
-userSchema.pre('save', function(next) {
-  if (this.isModified('email')) {
-    this.email = this.email.toLowerCase();
-  }
-  next();
-});
 
 const User = mongoose.model('User', userSchema);
 

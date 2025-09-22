@@ -230,29 +230,48 @@ const initSuperTokens = () => {
                                     lastName ? lastName.trim() :
                                     email;
                     
-                    // Create user in our database
-                    const createdUser = await User.createUser(
-                      response.user.id,
+                    // Create minimal user record in MongoDB
+                    await User.createUser(response.user.id);
+                    
+                    // Store user data in SuperTokens metadata
+                    const UserMetadata = require('supertokens-node/recipe/usermetadata');
+                    const UserRoles = require('supertokens-node/recipe/userroles');
+                    
+                    await UserMetadata.updateUserMetadata(response.user.id, {
                       email,
-                      fullName,
-                      firstName,
-                      lastName,
-                      phone
-                    );
+                      first_name: firstName || '',
+                      last_name: lastName || '',
+                      name: fullName,
+                      phone: phone || '',
+                      role: 'admin', // Default role
+                      status: 'active',
+                      isEmailVerified: false,
+                      createdAt: new Date().toISOString()
+                    });
                     
-                    // Generate and send OTP for email verification
+                    // Assign default role
+                    await UserRoles.addRoleToUser("public", response.user.id, 'admin');
+                    
+                    console.log('✅ User created with SuperTokens metadata via signup');
+                    
+                    // Send OTP verification automatically after signup
                     try {
-                      const otpResult = await createdUser.sendOTPEmail();
-                      if (otpResult.success) {
-                        console.log('✅ OTP sent successfully to new user:', email);
+                      const Passwordless = require('supertokens-node/recipe/passwordless');
+                      
+                      // Send OTP using Passwordless recipe
+                      const otpResponse = await Passwordless.createCode({
+                        tenantId: "public",
+                        email: email
+                      });
+                      
+                      if (otpResponse.status === "OK") {
+                        console.log('✅ OTP sent automatically after signup');
                       } else {
-                        console.error('❌ Failed to send OTP email:', otpResult.error);
+                        console.error('❌ Failed to send OTP after signup:', otpResponse.status);
                       }
-                    } catch (otpError) {
-                      console.error('❌ Error sending OTP to new user:', otpError);
+                    } catch (verificationError) {
+                      console.error('❌ Error sending OTP after signup:', verificationError.message);
                     }
-                    
-                    console.log('✅ User created in database via SuperTokens signup');
                   } catch (error) {
                     console.error('❌ Error creating user in database via SuperTokens signup:', error);
                     // Don't fail the signup if database creation fails
@@ -297,35 +316,36 @@ const initSuperTokens = () => {
                 // Create new session with user role
                 const session = await originalImplementation.createNewSession(input);
                 
-                // Add user role to session
+                // Add user role and data to session from SuperTokens
                 try {
-                  const User = require('../models/User');
-                  const dbUser = await User.findOne({ supertokensUserId: input.userId });
-                  if (dbUser) {
-                    await session.updateAccessTokenPayload({
-                      role: dbUser.role || 'admin', // Default role is 'admin'
-                      email: dbUser.email,
-                      name: dbUser.name
-                    });
-                    console.log('✅ Added role to session:', dbUser.role || 'admin');
-                  } else {
-                    // If user not found in database, set default role
-                    await session.updateAccessTokenPayload({
-                      role: 'admin', // Default role
-                      email: input.userEmail || '',
-                      name: input.userName || ''
-                    });
-                    console.log('✅ Added default role to session: admin');
-                  }
+                  const UserMetadata = require('supertokens-node/recipe/usermetadata');
+                  const UserRoles = require('supertokens-node/recipe/userroles');
+                  
+                  // Get user metadata from SuperTokens
+                  const metadata = await UserMetadata.getUserMetadata(input.userId);
+                  
+                  // Get user roles from SuperTokens
+                  const rolesResponse = await UserRoles.getRolesForUser("public", input.userId);
+                  const userRoles = rolesResponse.roles || ['admin']; // Default to admin
+                  const primaryRole = userRoles[0] || 'admin';
+                  
+                  await session.mergeIntoAccessTokenPayload({
+                    role: primaryRole,
+                    email: metadata.metadata.email || '',
+                    name: metadata.metadata.name || ''
+                  });
+                  
+                  console.log('✅ Added role to session from SuperTokens:', primaryRole);
                 } catch (error) {
                   console.log('⚠️ Error adding role to session:', error.message);
-                  // Set default role even if there's an error
+                  // If metadata not found, set default values
                   try {
-                    await session.updateAccessTokenPayload({
-                      role: 'admin',
-                      email: input.userEmail || '',
-                      name: input.userName || ''
+                    await session.mergeIntoAccessTokenPayload({
+                      role: 'admin', // Default role
+                      email: '',
+                      name: ''
                     });
+                    console.log('✅ Added default role to session: admin');
                   } catch (payloadError) {
                     console.log('⚠️ Error setting default role:', payloadError.message);
                   }
