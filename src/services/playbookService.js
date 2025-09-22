@@ -1,5 +1,6 @@
 // new file servicenow
 const Playbook = require('../models/Playbook');
+const playbookVectorizationService = require('./playbookVectorizationService');
 
 class PlaybookService {
   /**
@@ -115,6 +116,16 @@ class PlaybookService {
       const playbook = new Playbook(playbookData);
       const savedPlaybook = await playbook.save();
       
+      // Store in vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.storePlaybookVector(savedPlaybook);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook saved to MongoDB but failed to store in vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook saved to MongoDB but vector storage failed:', vectorError.message);
+      }
+      
       return {
         success: true,
         data: savedPlaybook,
@@ -179,6 +190,16 @@ class PlaybookService {
         };
       }
 
+      // Update in vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.updatePlaybookVector(playbook);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook updated in MongoDB but failed to update in vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook updated in MongoDB but vector update failed:', vectorError.message);
+      }
+
       return {
         success: true,
         data: playbook,
@@ -218,6 +239,16 @@ class PlaybookService {
           success: false,
           error: 'Playbook not found'
         };
+      }
+
+      // Delete from vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.deletePlaybookVector(id);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook deleted from MongoDB but failed to delete from vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook deleted from MongoDB but vector deletion failed:', vectorError.message);
       }
 
       return {
@@ -364,6 +395,124 @@ class PlaybookService {
       return {
         success: false,
         error: 'Failed to increment usage',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Search playbooks using vector similarity
+   */
+  async searchPlaybooksByVector(query, options = {}) {
+    try {
+      const result = await playbookVectorizationService.searchSimilarPlaybooks(query, options);
+      return result;
+    } catch (error) {
+      console.error('Error searching playbooks by vector:', error);
+      return {
+        success: false,
+        error: 'Failed to search playbooks by vector',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Hybrid search combining text search and vector similarity
+   */
+  async hybridSearchPlaybooks(query, options = {}) {
+    try {
+      const { 
+        vectorWeight = 0.7, 
+        textWeight = 0.3, 
+        maxResults = 10,
+        filters = {}
+      } = options;
+
+      // Perform both searches in parallel
+      const [vectorResults, textResults] = await Promise.all([
+        this.searchPlaybooksByVector(query, { ...options, topK: maxResults }),
+        this.searchPlaybooks(query)
+      ]);
+
+      if (!vectorResults.success && !textResults.success) {
+        return {
+          success: false,
+          error: 'Both vector and text search failed'
+        };
+      }
+
+      // Combine and score results
+      const combinedResults = new Map();
+      
+      // Add vector results with vector weight
+      if (vectorResults.success && vectorResults.data) {
+        vectorResults.data.forEach(playbook => {
+          const score = playbook.similarity_score * vectorWeight;
+          combinedResults.set(playbook.playbook_id, {
+            ...playbook,
+            combined_score: score,
+            search_type: 'vector'
+          });
+        });
+      }
+
+      // Add text results with text weight
+      if (textResults.success && textResults.data) {
+        textResults.data.forEach(playbook => {
+          const existing = combinedResults.get(playbook.playbook_id);
+          if (existing) {
+            // Combine scores for playbooks found in both searches
+            existing.combined_score += textWeight;
+            existing.search_type = 'hybrid';
+          } else {
+            // Add new playbook with text weight
+            combinedResults.set(playbook.playbook_id, {
+              ...playbook,
+              combined_score: textWeight,
+              search_type: 'text'
+            });
+          }
+        });
+      }
+
+      // Sort by combined score and limit results
+      const finalResults = Array.from(combinedResults.values())
+        .sort((a, b) => b.combined_score - a.combined_score)
+        .slice(0, maxResults);
+
+      return {
+        success: true,
+        data: finalResults,
+        count: finalResults.length,
+        query: query,
+        search_type: 'hybrid',
+        weights: {
+          vector: vectorWeight,
+          text: textWeight
+        }
+      };
+    } catch (error) {
+      console.error('Error in hybrid search:', error);
+      return {
+        success: false,
+        error: 'Failed to perform hybrid search',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Get vectorization service health status
+   */
+  async getVectorizationHealth() {
+    try {
+      return await playbookVectorizationService.getHealthStatus();
+    } catch (error) {
+      console.error('Error getting vectorization health:', error);
+      return {
+        success: false,
+        error: 'Failed to get vectorization health',
         details: error.message
       };
     }
