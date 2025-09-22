@@ -39,7 +39,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version', 'x-socket-id'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
   optionsSuccessStatus: 200
