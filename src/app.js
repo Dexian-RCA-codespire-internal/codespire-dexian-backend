@@ -115,6 +115,9 @@ setupSwagger(app, PORT);
 // API routes
 app.use('/api/v1', require('./routes'));
 
+// Direct chat API routes for frontend compatibility
+app.use('/api/chat', require('./routes/chat'));
+
 // Note: Password reset is now handled via OTP through /api/v1/auth routes
 
 // SuperTokens routes should be handled by middleware, but let's add a fallback

@@ -35,9 +35,18 @@ class OllamaService {
     try {
       const model = options.model || 'llama2';
       
+      // Build context from conversation history if provided
+      let contextPrompt = prompt;
+      if (options.history && options.history.length > 0) {
+        const contextMessages = options.history.map(msg => 
+          `${msg.role}: ${msg.content}`
+        ).join('\n');
+        contextPrompt = `Previous conversation:\n${contextMessages}\n\nCurrent message: ${prompt}`;
+      }
+      
       const response = await axios.post(`${this.baseURL}/api/generate`, {
         model: model,
-        prompt: prompt,
+        prompt: contextPrompt,
         stream: false
       });
 
