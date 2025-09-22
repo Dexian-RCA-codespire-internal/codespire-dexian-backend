@@ -11,6 +11,7 @@ const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
 const ticketResolutionRoutes = require('./ticketResolution');
 const rcaGenerationRoutes = require('./rcaGeneration');
+const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
 
 // Mount routes
@@ -22,6 +23,7 @@ router.use('/servicenow-polling', servicenowPollingRoutes);
 router.use('/ticket-similarity', ticketSimilarityRoutes);
 router.use('/tickets', ticketResolutionRoutes);
 router.use('/rca', rcaGenerationRoutes);
+router.use('/auto-suggestion', autoSuggestionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
 
@@ -41,6 +43,7 @@ router.get('/', (req, res) => {
       ticketSimilarity: '/ticket-similarity',
       ticketResolution: '/tickets/resolve',
       rcaGeneration: '/rca',
+      autoSuggestion: '/auto-suggestion',
       chat: '/chat',
       playbooks: '/playbooks'
     },
