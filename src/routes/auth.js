@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
+const { doc } = require('../utils/apiDoc');
 const {
   register,
   login,
@@ -87,37 +88,105 @@ const resendMagicLinkValidation = [
   body('preAuthSessionId').notEmpty()
 ];
 
-// Routes
-router.post('/register', registerValidation, register);
-router.post('/login', loginValidation, login);
-router.post('/logout', authenticateToken, logout);
-router.get('/profile', authenticateToken, getProfile);
-router.put('/profile', authenticateToken, profileValidation, updateProfile);
+// Authentication Routes
+router.post('/register', 
+  doc.create('/auth/register', 'Register a new user account', ['Authentication'], {
+    type: 'object',
+    properties: {
+      email: { type: 'string', format: 'email', description: 'User email address' },
+      password: { type: 'string', minLength: 6, description: 'User password (minimum 6 characters)' }
+    },
+    required: ['email', 'password']
+  }),
+  registerValidation, register);
 
-// OTP and Email routes
-router.post('/send-otp', otpValidation, sendOTP);
-router.post('/verify-otp', verifyOTPValidation, verifyOTP);
-router.post('/resend-otp', resendOTPValidation, resendOTP);
+router.post('/login', 
+  doc.create('/auth/login', 'Login with email and password', ['Authentication'], {
+    type: 'object',
+    properties: {
+      email: { type: 'string', format: 'email', description: 'User email address' },
+      password: { type: 'string', description: 'User password' }
+    },
+    required: ['email', 'password']
+  }),
+  loginValidation, login);
 
-// Magic Link routes
-router.post('/send-magic-link', magicLinkValidation, sendMagicLink);
-router.post('/verify-magic-link', verifyMagicLinkValidation, verifyMagicLink);
-router.get('/verify-magic-link/:token', verifyMagicLink); // GET route for direct magic link clicks
-router.post('/resend-magic-link', resendMagicLinkValidation, resendMagicLink);
+router.post('/logout', 
+  doc.post('/auth/logout', 'Logout current user session', ['Authentication']),
+  authenticateToken, logout);
 
-// Password Reset routes (SuperTokens-based)
-router.post('/forgot-password', forgotPasswordValidation, forgotPassword);
-router.post('/reset-password', resetPasswordValidation, resetPasswordWithToken);
+router.get('/profile', 
+  doc.get('/auth/profile', 'Get current user profile information', ['Authentication']),
+  authenticateToken, getProfile);
 
-// General routes
-router.post('/check-verification', otpValidation, checkVerificationStatus);
-router.post('/send-welcome', authenticateToken, sendWelcomeEmail);
+router.put('/profile', 
+  doc.update('/auth/profile', 'Update user profile information', ['Authentication'], {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 2, description: 'Full name' }
+    },
+    required: ['name']
+  }),
+  authenticateToken, profileValidation, updateProfile);
 
-// SuperTokens Email Verification routes
-router.post('/generate-email-verification-token', authenticateToken, generateEmailVerificationToken);
-router.post('/verify-email-token', authenticateToken, verifyEmailToken);
+// OTP Authentication Routes
+router.post('/send-otp', 
+  doc.post('/auth/send-otp', 'Send OTP code to user email for verification', ['Authentication', 'OTP']),
+  otpValidation, sendOTP);
 
-// Custom OTP verification with token
-router.post('/verify-custom-otp', authenticateToken, verifyCustomOTP);
+router.post('/verify-otp', 
+  doc.post('/auth/verify-otp', 'Verify OTP code for user authentication', ['Authentication', 'OTP']),
+  verifyOTPValidation, verifyOTP);
+
+router.post('/resend-otp', 
+  doc.post('/auth/resend-otp', 'Resend OTP code to user email', ['Authentication', 'OTP']),
+  resendOTPValidation, resendOTP);
+
+// Magic Link Authentication Routes
+router.post('/send-magic-link', 
+  doc.post('/auth/send-magic-link', 'Send magic link to user email for passwordless login', ['Authentication', 'Magic Link']),
+  magicLinkValidation, sendMagicLink);
+
+router.post('/verify-magic-link', 
+  doc.post('/auth/verify-magic-link', 'Verify magic link code for authentication', ['Authentication', 'Magic Link']),
+  verifyMagicLinkValidation, verifyMagicLink);
+
+router.get('/verify-magic-link/:token', 
+  doc.get('/auth/verify-magic-link/{token}', 'Direct magic link verification via URL click', ['Authentication', 'Magic Link']),
+  verifyMagicLink);
+
+router.post('/resend-magic-link', 
+  doc.post('/auth/resend-magic-link', 'Resend magic link to user email', ['Authentication', 'Magic Link']),
+  resendMagicLinkValidation, resendMagicLink);
+
+// Password Reset Routes
+router.post('/forgot-password', 
+  doc.post('/auth/forgot-password', 'Send password reset email to user', ['Authentication', 'Password Reset']),
+  forgotPasswordValidation, forgotPassword);
+
+router.post('/reset-password', 
+  doc.post('/auth/reset-password', 'Reset password using reset token', ['Authentication', 'Password Reset']),
+  resetPasswordValidation, resetPasswordWithToken);
+
+// Additional Authentication Routes
+router.post('/check-verification', 
+  doc.post('/auth/check-verification', 'Check email verification status for user', ['Authentication']),
+  otpValidation, checkVerificationStatus);
+
+router.post('/send-welcome', 
+  doc.post('/auth/send-welcome', 'Send welcome email to authenticated user', ['Authentication']),
+  authenticateToken, sendWelcomeEmail);
+
+router.post('/generate-email-verification-token', 
+  doc.post('/auth/generate-email-verification-token', 'Generate email verification token', ['Authentication', 'Email Verification']),
+  authenticateToken, generateEmailVerificationToken);
+
+router.post('/verify-email-token', 
+  doc.post('/auth/verify-email-token', 'Verify email using verification token', ['Authentication', 'Email Verification']),
+  authenticateToken, verifyEmailToken);
+
+router.post('/verify-custom-otp', 
+  doc.post('/auth/verify-custom-otp', 'Verify custom OTP for authenticated user', ['Authentication', 'OTP']),
+  authenticateToken, verifyCustomOTP);
 
 module.exports = router;

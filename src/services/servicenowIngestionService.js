@@ -2,7 +2,9 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const { webSocketService } = require('./websocketService');
 const mongoose = require('mongoose');
+const ticketVectorizationService = require('./ticketVectorizationService');
 
 // Bulk Import State Schema
 const bulkImportStateSchema = new mongoose.Schema({
@@ -21,7 +23,7 @@ const BulkImportState = mongoose.model('BulkImportState', bulkImportStateSchema)
  */
 const hasCompletedBulkImport = async () => {
   try {
-    const state = await BulkImportState.findOne({ service: 'servicenow' });
+    const state = await BulkImportState.findOne({ service: 'servicenow' }).maxTimeMS(10000);
     return state ? state.hasCompletedInitialImport : false;
   } catch (error) {
     console.error('❌ Error checking bulk import state:', error.message);
@@ -76,7 +78,7 @@ const resetBulkImportState = async () => {
  */
 const getBulkImportStatus = async () => {
   try {
-    const state = await BulkImportState.findOne({ service: 'servicenow' });
+    const state = await BulkImportState.findOne({ service: 'servicenow' }).maxTimeMS(10000);
     return {
       hasCompleted: state ? state.hasCompletedInitialImport : false,
       lastImportTime: state ? state.lastBulkImportTime : null,
@@ -198,6 +200,7 @@ const fetchTicketsAndSave = async (options = {}) => {
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
+    let vectorizedCount = 0;
 
     for (const ticketData of allTickets) {
       try {
@@ -224,26 +227,67 @@ const fetchTicketsAndSave = async (options = {}) => {
           raw: ticketData
         };
 
-        // Check if ticket exists first
-        const existingTicket = await Ticket.findOne({ 
-          ticket_id: ticketData.number, 
-          source: 'ServiceNow' 
-        });
-
-        if (!existingTicket) {
-          // Create new ticket
-          const newTicket = new Ticket(ticketDoc);
-          await newTicket.save();
-          savedCount++;
-        } else {
-          // Update existing ticket
-          await Ticket.findOneAndUpdate(
-            { ticket_id: ticketData.number, source: 'ServiceNow' },
-            ticketDoc,
-            { new: true }
-          );
-          updatedCount++;
+        // Check if ticket exists first with timeout handling
+        let existingTicket;
+        try {
+          existingTicket = await Ticket.findOne({ 
+            ticket_id: ticketData.number, 
+            source: 'ServiceNow' 
+          }).maxTimeMS(10000); // 10 second timeout
+        } catch (findError) {
+          console.error(`❌ Error checking existing ticket ${ticketData.number}:`, findError.message);
+          throw findError;
         }
+
+        let savedTicket;
+        let isNewTicket = false;
+        
+        if (!existingTicket) {
+          // Create new ticket with timeout handling
+          try {
+            const newTicket = new Ticket(ticketDoc);
+            savedTicket = await newTicket.save();
+            savedCount++;
+            isNewTicket = true;
+            // Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
+            console.log(`✅ Created new ticket: ${ticketData.number}`);
+          } catch (saveError) {
+            console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
+            throw saveError;
+          }
+        } else {
+          // Update existing ticket with timeout handling
+          try {
+            savedTicket = await Ticket.findOneAndUpdate(
+              { ticket_id: ticketData.number, source: 'ServiceNow' },
+              ticketDoc,
+              { new: true, maxTimeMS: 10000 }
+            );
+            updatedCount++;
+            // Emit WebSocket event for updated ticket
+          webSocketService.emitUpdatedTicket(savedTicket.toObject());
+            console.log(`✅ Updated existing ticket: ${ticketData.number}`);
+          } catch (updateError) {
+            console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
+            throw updateError;
+          }
+        }
+
+        // Vectorize and store in Qdrant ONLY for new tickets
+        if (isNewTicket) {
+          try {
+            const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticketDoc, savedTicket._id);
+            if (vectorResult.success) {
+              vectorizedCount++;
+            } else {
+              console.log(`⚠️ Failed to vectorize ticket ${ticketData.number}: ${vectorResult.reason || vectorResult.error}`);
+            }
+          } catch (vectorError) {
+            console.error(`❌ Error vectorizing ticket ${ticketData.number}:`, vectorError.message);
+          }
+        }
+
       } catch (error) {
         console.error(`❌ Error saving ticket ${ticketData.number}:`, error.message);
         errorCount++;
@@ -253,6 +297,7 @@ const fetchTicketsAndSave = async (options = {}) => {
     console.log(`✅ Database operations completed:`);
     console.log(`   - New tickets saved: ${savedCount}`);
     console.log(`   - Existing tickets updated: ${updatedCount}`);
+    console.log(`   - Vectorized in Qdrant: ${vectorizedCount}`);
     console.log(`   - Errors: ${errorCount}`);
     
     return {
@@ -269,6 +314,7 @@ const fetchTicketsAndSave = async (options = {}) => {
       database: {
         saved: savedCount,
         updated: updatedCount,
+        vectorized: vectorizedCount,
         errors: errorCount
       }
     };
@@ -364,6 +410,9 @@ const bulkImportAllTickets = async (options = {}) => {
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
+    let vectorizedCount = 0;
+    const ticketsForVectorization = [];
+    const mongoIdsForVectorization = [];
 
     for (const ticketData of allTickets) {
       try {
@@ -391,17 +440,33 @@ const bulkImportAllTickets = async (options = {}) => {
           raw: ticketData // Store original payload
         };
 
-        // Check if ticket exists first
-        const existingTicket = await Ticket.findOne({ 
-          ticket_id: ticketData.number, 
-          source: 'ServiceNow' 
-        });
+        // Check if ticket exists first with timeout handling
+        let existingTicket;
+        try {
+          existingTicket = await Ticket.findOne({ 
+            ticket_id: ticketData.number, 
+            source: 'ServiceNow' 
+          }).maxTimeMS(10000); // 10 second timeout
+        } catch (findError) {
+          console.error(`❌ Error checking existing ticket ${ticketData.number}:`, findError.message);
+          throw findError;
+        }
 
+        let savedTicket;
+        let isNewTicket = false;
+        
         if (!existingTicket) {
           // Create new ticket
+          try {
           const newTicket = new Ticket(ticketDoc);
-          await newTicket.save();
+          savedTicket = await newTicket.save();
           savedCount++;
+          isNewTicket = true;// Emit WebSocket event for new ticket
+          webSocketService.emitNewTicket(newTicket.toObject());
+        } catch (saveError) {
+          console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
+          throw saveError;
+        }
         } else {
           // Update existing ticket
           await Ticket.findOneAndUpdate(
@@ -411,15 +476,32 @@ const bulkImportAllTickets = async (options = {}) => {
           );
           updatedCount++;
         }
+
       } catch (error) {
         console.error(`❌ Error saving ticket ${ticketData.number}:`, error.message);
         errorCount++;
       }
     }
 
+    // Batch vectorize all tickets
+    if (ticketsForVectorization.length > 0) {
+      console.log('🔄 Vectorizing tickets for similarity search...');
+      try {
+        const vectorResults = await ticketVectorizationService.vectorizeAndStoreTicketsBatch(
+          ticketsForVectorization, 
+          mongoIdsForVectorization
+        );
+        vectorizedCount = vectorResults.successful;
+        console.log(`✅ Vectorization completed: ${vectorResults.successful} successful, ${vectorResults.failed} failed`);
+      } catch (vectorError) {
+        console.error('❌ Error in batch vectorization:', vectorError.message);
+      }
+    }
+
     console.log(`✅ Bulk import database operations completed:`);
     console.log(`   - New tickets saved: ${savedCount}`);
     console.log(`   - Existing tickets updated: ${updatedCount}`);
+    console.log(`   - Vectorized in Qdrant: ${vectorizedCount}`);
     console.log(`   - Errors: ${errorCount}`);
     
     // Mark bulk import as completed
@@ -433,6 +515,7 @@ const bulkImportAllTickets = async (options = {}) => {
       database: {
         saved: savedCount,
         updated: updatedCount,
+        vectorized: vectorizedCount,
         errors: errorCount
       }
     };

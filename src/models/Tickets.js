@@ -31,7 +31,14 @@ const TicketSchema = new mongoose.Schema({
     id:             { type: String, default: null }
   },
   tags:             { type: [String], default: [] },
-  raw:              { type: mongoose.Schema.Types.Mixed }                  // store the entire original payload (optional)
+  raw:              { type: mongoose.Schema.Types.Mixed },                 // store the entire original payload (optional)
+  
+  // Resolution analysis fields
+  problem_step1:    { type: String },                                      // Problem description step 1
+  timeline_step2:   { type: String },                                      // Timeline analysis step 2
+  impact_step3:     { type: String },                                      // Impact assessment step 3
+  findings_step4:   { type: String },                                      // Findings from investigation step 4
+  root_cause_step5: { type: String }                                       // Root cause analysis step 5
 }, {
   timestamps: true, // adds createdAt and updatedAt
   collection: 'tickets'
