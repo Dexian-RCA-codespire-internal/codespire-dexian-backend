@@ -358,18 +358,13 @@ Generate a comprehensive customer-friendly summary now:`;
     }
 
     /**
-     * Generate streaming RCA with WebSocket
+     * Generate streaming RCA with real-time WebSocket streaming from Gemini
      */
     async generateStreamingRCA(prompt, socketId, type) {
         try {
-            // Generate full response
-            const fullResponse = await llmProvider.generateText(this.technicalLLM, prompt);
-            
-            // Stream content using WebSocket utilities
-            await WebSocketUtils.streamContent(socketId, fullResponse, {
+            // Stream directly from Gemini LLM - natural word-by-word streaming
+            const fullResponse = await llmProvider.generateStreamingText(this.technicalLLM, prompt, socketId, {
                 eventName: config.websocket.events.rcaGeneration,
-                chunkSize: config.streaming.chunkSize,
-                delay: config.streaming.delay,
                 type,
                 metadata: { 
                     contentType: type === 'technical' ? 'technicalRCA' : 'customerSummary' 
@@ -390,20 +385,15 @@ Generate a comprehensive customer-friendly summary now:`;
     }
 
     /**
-     * Generate streaming customer summary with WebSocket
+     * Generate streaming customer summary with real-time WebSocket streaming from Gemini
      */
     async generateStreamingSummary(prompt, socketId, type) {
         try {
             const { resolutionAgent } = require('../ticket-resolution');
             
-            // Generate full response
-            const fullResponse = await llmProvider.generateText(resolutionAgent.llm, prompt);
-            
-            // Stream content using WebSocket utilities
-            await WebSocketUtils.streamContent(socketId, fullResponse, {
+            // Stream directly from Gemini LLM - natural word-by-word streaming
+            const fullResponse = await llmProvider.generateStreamingText(resolutionAgent.llm, prompt, socketId, {
                 eventName: config.websocket.events.rcaGeneration,
-                chunkSize: config.streaming.chunkSize,
-                delay: config.streaming.delay,
                 type,
                 metadata: { 
                     contentType: 'customerSummary' 

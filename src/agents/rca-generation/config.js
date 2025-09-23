@@ -23,10 +23,10 @@ const config = defaultConfig.createRAGAgentConfig('rca-generation', {
     
     // Response settings
     response: {
-        maxTechnicalRcaLength: 4000,
-        minTechnicalRcaLength: 1000,
-        maxCustomerSummaryLength: 1000,
-        minCustomerSummaryLength: 500
+        maxTechnicalRcaLength: 1000,
+        minTechnicalRcaLength: 500,
+        maxCustomerSummaryLength: 500,
+        minCustomerSummaryLength: 100
     },
     
     // RCA Structure Template

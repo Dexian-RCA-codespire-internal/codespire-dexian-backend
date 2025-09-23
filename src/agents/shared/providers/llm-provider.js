@@ -97,10 +97,123 @@ async function generateStructuredResponse(llm, prompt, schema = null) {
     }
 }
 
+/**
+ * Generate streaming text using LLM with real-time WebSocket streaming
+ * @param {Object} llm - LLM instance
+ * @param {string} prompt - Text prompt
+ * @param {string} socketId - WebSocket socket ID for streaming
+ * @param {Object} options - Streaming options
+ * @returns {Promise<string>} Complete generated text
+ */
+async function generateStreamingText(llm, prompt, socketId, options = {}) {
+    const {
+        eventName = 'content_stream',
+        chunkSize = 50,
+        delay = 100,
+        type = 'text',
+        metadata = {}
+    } = options;
+
+    try {
+        const { webSocketService } = require('../../../services/websocketService');
+        
+        if (!webSocketService.getServer()) {
+            throw new Error('WebSocket server not initialized');
+        }
+
+        let fullResponse = '';
+        let chunkBuffer = '';
+        let chunkCount = 0;
+
+        // Emit start event
+        webSocketService.getServer().to(socketId).emit(eventName, {
+            type,
+            chunk: '',
+            isStart: true,
+            progress: 0,
+            timestamp: new Date().toISOString(),
+            ...metadata
+        });
+
+        // Stream from LLM
+        const stream = await llm.stream(prompt);
+        
+        for await (const chunk of stream) {
+            const content = chunk.content || '';
+            fullResponse += content;
+            chunkBuffer += content;
+
+            // Send chunks when buffer reaches chunkSize
+            while (chunkBuffer.length >= chunkSize) {
+                const chunkToSend = chunkBuffer.substring(0, chunkSize);
+                chunkBuffer = chunkBuffer.substring(chunkSize);
+                chunkCount++;
+
+                const progress = Math.min(95, Math.round((chunkCount * chunkSize / (chunkCount * chunkSize + chunkBuffer.length)) * 100));
+
+                webSocketService.getServer().to(socketId).emit(eventName, {
+                    type,
+                    chunk: chunkToSend,
+                    isLast: false,
+                    progress,
+                    timestamp: new Date().toISOString(),
+                    ...metadata
+                });
+
+                // Add delay between chunks
+                if (delay > 0) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // Send remaining buffer
+        if (chunkBuffer.length > 0) {
+            chunkCount++;
+            webSocketService.getServer().to(socketId).emit(eventName, {
+                type,
+                chunk: chunkBuffer,
+                isLast: false,
+                progress: 95,
+                timestamp: new Date().toISOString(),
+                ...metadata
+            });
+        }
+
+        // Send completion event
+        webSocketService.getServer().to(socketId).emit(eventName, {
+            type,
+            chunk: '',
+            isLast: true,
+            progress: 100,
+            timestamp: new Date().toISOString(),
+            ...metadata
+        });
+
+        return fullResponse;
+
+    } catch (error) {
+        console.error('Error in generateStreamingText:', error);
+        
+        // Emit error event
+        const { webSocketService } = require('../../../services/websocketService');
+        if (webSocketService.getServer()) {
+            webSocketService.getServer().to(socketId).emit('rca_error', {
+                error: error.message,
+                type: 'streaming_error',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        throw error;
+    }
+}
+
 module.exports = {
     createLLM,
     generateText,
     generateStructuredResponse,
+    generateStreamingText,
     getAvailableLLMProviders,
     getLLMProviderConfig,
     LLM_CONFIGS
