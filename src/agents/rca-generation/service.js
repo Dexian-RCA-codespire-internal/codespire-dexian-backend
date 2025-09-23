@@ -7,6 +7,7 @@ const rcaAgent = require('./rca-agent');
 const { utils } = require('../shared');
 const { createSuccessResponse, createErrorResponse } = utils.responseFormatting;
 const config = require('./config');
+const RCAResolved = require('../../models/RCAResolved');
 
 class RCAGenerationService {
     constructor() {
@@ -117,14 +118,30 @@ class RCAGenerationService {
             const processingTime = Date.now() - startTime;
             
             if (result.success) {
+                // Store RCA results in database
+                const storeResult = await this.storeRCAResults(
+                    ticketData, 
+                    rcaFields, 
+                    result.data.technicalRCA, 
+                    result.data.customerSummary
+                );
+                
                 return createSuccessResponse({
                     technicalRCA: result.data.technicalRCA,
                     customerSummary: result.data.customerSummary,
                     ticketData: result.data.ticketData,
                     rcaFields: result.data.rcaFields,
                     processing_time_ms: processingTime,
-                    generatedAt: result.data.generatedAt
-                }, 'Complete RCA generated successfully');
+                    generatedAt: result.data.generatedAt,
+                    database: storeResult.success ? {
+                        rcaId: storeResult.data.rcaId,
+                        ticketNumber: storeResult.data.ticketNumber,
+                        stored: true
+                    } : {
+                        stored: false,
+                        error: storeResult.error
+                    }
+                }, 'Complete RCA generated and stored successfully');
             } else {
                 return createErrorResponse(
                     'Failed to generate complete RCA',
@@ -224,6 +241,55 @@ class RCAGenerationService {
             isValid: errors.length === 0,
             errors
         };
+    }
+
+    /**
+     * Store RCA results in database
+     */
+    async storeRCAResults(ticketData, rcaFields, technicalRCA, customerSummary) {
+        try {
+            // Create RCA resolved record
+            const rcaRecord = new RCAResolved({
+                ticket_number: ticketData.ticket_id || ticketData.ticket_number || 'RCA-' + Date.now(),
+                source: 'RCA_Generation',
+                short_description: ticketData.short_description || 'Generated RCA',
+                description: ticketData.description || '',
+                category: ticketData.category || 'General',
+                priority: ticketData.priority || 'Medium',
+                impact: rcaFields.impact || '',
+                urgency: ticketData.urgency || 'Medium',
+                sys_id: ticketData.sys_id || 'RCA-' + Date.now(),
+                root_cause: rcaFields.rootCause || '',
+                close_code: 'Solved (Permanently)',
+                customer_summary: customerSummary,
+                problem_statement: rcaFields.problem || '',
+                resolution_analysis: technicalRCA,
+                resolved_by: 'AI_System',
+                resolved_at: new Date(),
+                resolution_method: 'ai_assisted',
+                servicenow_updated: false,
+                servicenow_update_attempts: 0,
+                last_servicenow_update_attempt: null,
+                servicenow_update_error: null,
+                created_at: new Date(),
+                updated_at: new Date()
+            });
+
+            const savedRecord = await rcaRecord.save();
+            
+            return createSuccessResponse({
+                rcaId: savedRecord._id,
+                ticketNumber: savedRecord.ticket_number,
+                message: 'RCA results stored successfully'
+            }, 'RCA results saved to database');
+
+        } catch (error) {
+            console.error('❌ Error storing RCA results:', error);
+            return createErrorResponse(
+                'Failed to store RCA results',
+                error.message
+            );
+        }
     }
 
     /**

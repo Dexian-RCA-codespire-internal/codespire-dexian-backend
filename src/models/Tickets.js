@@ -31,6 +31,7 @@ const TicketSchema = new mongoose.Schema({
     id:             { type: String, default: null }
   },
   tags:             { type: [String], default: [] },
+  logs:             { type: [mongoose.Schema.Types.Mixed], default: [] },   // Splunk server logs
   raw:              { type: mongoose.Schema.Types.Mixed },                 // store the entire original payload (optional)
   
   // Resolution analysis fields

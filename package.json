@@ -9,7 +9,15 @@
     "test": "jest",
     "test:connections": "node src/utils/testConnections.js",
     "upload:tickets": "node scripts/upload-tickets-to-qdrant.js",
-    "test:upload": "node scripts/test-upload-process.js"
+    "test:upload": "node scripts/test-upload-process.js",
+    "generate:tickets": "node scripts/generate-tickets.js",
+    "test:generate": "node scripts/test-generate-tickets.js",
+    "clear:tickets": "node scripts/clear-and-regenerate.js",
+    "verify:tickets": "node scripts/verify-tickets.js",
+    "generate:fast": "node scripts/generate-tickets-fast.js",
+    "vectorize:tickets": "node scripts/vectorize-tickets.js",
+    "setup:complete": "node scripts/complete-setup.js",
+    "setup:env": "node scripts/setup-env.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.9.1",
