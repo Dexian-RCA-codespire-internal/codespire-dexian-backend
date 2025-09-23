@@ -75,14 +75,29 @@ class PlaybookVectorizationService {
         const weights = this.config.textProcessing.fieldWeights;
         let combinedText = '';
 
+        // Debug logging for playbook weight analysis
+        console.log('📚 PLAYBOOK WEIGHT ANALYSIS:');
+        console.log('🆔 Playbook ID:', playbook.playbook_id);
+        console.log('⚖️  Applied Weights:', weights);
+        console.log('📄 Field Contents:');
+        console.log('   - title:', playbook.title?.substring(0, 100) + (playbook.title?.length > 100 ? '...' : ''));
+        console.log('   - description:', playbook.description?.substring(0, 100) + (playbook.description?.length > 100 ? '...' : ''));
+        console.log('   - steps count:', playbook.steps?.length || 0);
+        console.log('   - tags:', playbook.tags?.join(', ') || 'MISSING');
+        console.log('   - outcome:', playbook.outcome?.substring(0, 100) + (playbook.outcome?.length > 100 ? '...' : ''));
+
         // Add title with weight
         if (playbook.title) {
-            combinedText += `${playbook.title} `.repeat(Math.ceil(weights.title * 10));
+            const titleText = `${playbook.title} `.repeat(Math.ceil(weights.title * 10));
+            combinedText += titleText;
+            console.log(`   📝 Title: repeated ${Math.ceil(weights.title * 10)} times`);
         }
 
         // Add description with weight
         if (playbook.description) {
-            combinedText += `${playbook.description} `.repeat(Math.ceil(weights.description * 10));
+            const descText = `${playbook.description} `.repeat(Math.ceil(weights.description * 10));
+            combinedText += descText;
+            console.log(`   📝 Description: repeated ${Math.ceil(weights.description * 10)} times`);
         }
 
         // Add steps with weight
@@ -90,19 +105,32 @@ class PlaybookVectorizationService {
             const stepsText = playbook.steps.map(step => 
                 `${step.title || ''} ${step.action || ''} ${step.expected_outcome || ''}`
             ).join(' ');
-            combinedText += `${stepsText} `.repeat(Math.ceil(weights.steps * 10));
+            const stepsRepeated = `${stepsText} `.repeat(Math.ceil(weights.steps * 10));
+            combinedText += stepsRepeated;
+            console.log(`   📝 Steps: repeated ${Math.ceil(weights.steps * 10)} times`);
         }
 
         // Add tags with weight
         if (playbook.tags && Array.isArray(playbook.tags)) {
             const tagsText = playbook.tags.join(' ');
-            combinedText += `${tagsText} `.repeat(Math.ceil(weights.tags * 10));
+            const tagsRepeated = `${tagsText} `.repeat(Math.ceil(weights.tags * 10));
+            combinedText += tagsRepeated;
+            console.log(`   📝 Tags: repeated ${Math.ceil(weights.tags * 10)} times`);
         }
 
         // Add outcome
         if (playbook.outcome) {
             combinedText += ` ${playbook.outcome}`;
+            console.log(`   📝 Outcome: added once`);
         }
+
+        console.log('🔤 Generated Text Length:', combinedText.trim().length);
+        console.log('📊 Weight Distribution:');
+        for (const [field, weight] of Object.entries(weights)) {
+            const repeatCount = Math.ceil(weight * 10);
+            console.log(`   - ${field}: ${(weight * 100).toFixed(1)}% (repeated ${repeatCount} times)`);
+        }
+        console.log('---');
 
         return combinedText.trim();
     }
