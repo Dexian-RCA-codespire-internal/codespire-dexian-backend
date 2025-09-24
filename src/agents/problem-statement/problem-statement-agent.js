@@ -217,7 +217,7 @@ ${context.description ? `Additional Description: ${context.description}` : ''}${
 
 Requirements:
 1. Generate THREE different problem definitions (30-50 words each) that clearly describe the issue from different perspectives
-2. Generate ONE insightful question that should be asked to better understand or solve this problem
+2. Generate ONE specific, targeted question (MAXIMUM 25 words) that directly relates to this exact problem (NOT a generic question like "What happened?" or "Describe the symptoms")
 3. Determine the issue type from: ${context.availableIssueTypes.join(', ')}
 4. Determine the severity level from: ${context.availableSeverityLevels.join(', ')}
 5. Determine the business impact category from: ${context.availableBusinessImpactCategories.join(', ')}
@@ -229,7 +229,7 @@ Respond in the following JSON format:
     "Second problem definition (30-50 words) - focus on business impact", 
     "Third problem definition (30-50 words) - focus on user experience"
   ],
-  "question": "One insightful question that should be asked to better understand or solve this problem",
+  "question": "One specific, concise question (max 25 words) directly related to this exact problem",
   "issueType": "One of the available issue types",
   "severity": "One of the available severity levels", 
   "businessImpact": "One of the available business impact categories",
@@ -241,7 +241,8 @@ Focus on:
 - Appropriate severity assessment
 - Realistic business impact evaluation
 - Clear, actionable problem definitions from multiple angles
-- Thought-provoking question that adds value to problem understanding`;
+- SPECIFIC, CONCISE question (max 25 words) that targets the root cause, investigation path, or solution approach
+- AVOID generic questions - make the question contextually relevant to the specific issue described`;
     }
 
     /**
@@ -290,6 +291,11 @@ Focus on:
 
         if (!response.question || typeof response.question !== 'string' || response.question.trim().length === 0) {
             errors.push('question is required and must be a non-empty string');
+        } else {
+            const wordCount = response.question.trim().split(/\s+/).length;
+            if (wordCount > 25) {
+                errors.push(`question must not exceed 25 words (current: ${wordCount} words)`);
+            }
         }
 
         if (!response.issueType || !ISSUE_TYPE_LIST.includes(response.issueType)) {
@@ -325,7 +331,7 @@ Focus on:
                 `Business process problem with ${shortDesc}...`,
                 `User experience issue related to ${shortDesc}...`
             ],
-            question: `What specific steps can be taken to resolve this ${shortDesc} issue?`,
+            question: `What's blocking the ${shortDesc.toLowerCase()} process?`,
             issueType: config.problemStatement.defaultIssueType,
             severity: config.problemStatement.defaultSeverity,
             businessImpact: config.problemStatement.defaultBusinessImpact,

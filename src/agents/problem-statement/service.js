@@ -89,7 +89,7 @@ class ProblemStatementService {
                 "Evaluating business impact and operational considerations...",
                 "Assessing user experience and workflow implications..."
             ],
-            question: "Generating insightful question to better understand this issue...",
+            question: "Generating concise question...",
             issueType: "Loading...",
             severity: "Loading...",
             businessImpact: "Loading...",
