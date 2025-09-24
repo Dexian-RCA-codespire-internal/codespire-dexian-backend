@@ -30,7 +30,7 @@ const NotificationSchema = new mongoose.Schema({
     },
     eventType: { 
       type: String, 
-      enum: ['new_ticket', 'updated_ticket', 'status_changed', 'system'], 
+      enum: ['new_ticket', 'updated_ticket', 'status_changed', 'system', 'sla_warning', 'sla_critical', 'sla_breached'], 
       default: 'system' 
     }
   },

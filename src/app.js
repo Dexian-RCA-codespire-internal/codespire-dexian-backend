@@ -21,6 +21,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
+const { slaMonitoringService } = require('./services/slaMonitoringService');
 const config = require('./config');
 
 
@@ -325,6 +326,15 @@ server.listen(PORT, async () => {
     }
   } else {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+  }
+
+  // Initialize SLA Monitoring Service
+  try {
+    console.log('🚀 Initializing SLA monitoring service...');
+    await slaMonitoringService.initialize();
+    console.log('✅ SLA monitoring service initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize SLA monitoring service:', error);
   }
 });
 

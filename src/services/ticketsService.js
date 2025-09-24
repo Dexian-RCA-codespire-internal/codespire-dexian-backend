@@ -1,6 +1,7 @@
 // new file servicenow
 const Ticket = require('../models/Tickets');
 const { notificationService } = require('./notificationService');
+const { createOrUpdateSLA } = require('./slaService');
 
 /**
  * Fetch tickets from MongoDB database
@@ -420,6 +421,19 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
     } catch (notificationError) {
       console.error(`⚠️ Failed to create notification for ticket update:`, notificationError.message);
       // Don't fail the update if notification fails
+    }
+
+    // Update SLA record for the updated ticket
+    try {
+      const slaResult = await createOrUpdateSLA(updatedTicket);
+      if (slaResult.success) {
+        console.log(`✅ Updated SLA record for ticket: ${updatedTicket.ticket_id}`);
+      } else {
+        console.log(`⚠️ Failed to update SLA for ticket ${updatedTicket.ticket_id}: ${slaResult.error}`);
+      }
+    } catch (slaError) {
+      console.error(`❌ Error updating SLA for ticket ${updatedTicket.ticket_id}:`, slaError.message);
+      // Don't fail the entire process if SLA update fails
     }
 
     console.log(`✅ Updated ticket: ${updatedTicket.ticket_id}`);
