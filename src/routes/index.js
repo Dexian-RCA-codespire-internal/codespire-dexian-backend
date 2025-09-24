@@ -14,6 +14,7 @@ const rcaGenerationRoutes = require('./rcaGeneration');
 const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
 const problemStatementRoutes = require('./problemStatement');
+const timelineContextRoutes = require('./timelineContext');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -28,6 +29,7 @@ router.use('/auto-suggestion', autoSuggestionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
 router.use('/problem-statement', problemStatementRoutes);
+router.use('/timeline-context', timelineContextRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -48,7 +50,8 @@ router.get('/', (req, res) => {
       autoSuggestion: '/auto-suggestion',
       chat: '/chat',
       playbooks: '/playbooks',
-      problemStatement: '/problem-statement'
+      problemStatement: '/problem-statement',
+      timelineContext: '/timeline-context'
     },
     documentation: {
       swagger: '/api/docs',
