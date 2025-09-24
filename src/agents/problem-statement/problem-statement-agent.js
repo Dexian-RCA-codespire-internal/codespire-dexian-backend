@@ -72,7 +72,8 @@ class ProblemStatementAgent {
             return {
                 success: true,
                 data: {
-                    problemDefinition: result.problemDefinition,
+                    problemDefinitions: result.problemDefinitions,
+                    question: result.question,
                     issueType: result.issueType,
                     severity: result.severity,
                     businessImpact: result.businessImpact,
@@ -215,14 +216,20 @@ Short Description: ${context.shortDescription}
 ${context.description ? `Additional Description: ${context.description}` : ''}${serverLogsText}
 
 Requirements:
-1. Generate a problem definition (30-50 words) that clearly describes the issue
-2. Determine the issue type from: ${context.availableIssueTypes.join(', ')}
-3. Determine the severity level from: ${context.availableSeverityLevels.join(', ')}
-4. Determine the business impact category from: ${context.availableBusinessImpactCategories.join(', ')}
+1. Generate THREE different problem definitions (30-50 words each) that clearly describe the issue from different perspectives
+2. Generate ONE insightful question that should be asked to better understand or solve this problem
+3. Determine the issue type from: ${context.availableIssueTypes.join(', ')}
+4. Determine the severity level from: ${context.availableSeverityLevels.join(', ')}
+5. Determine the business impact category from: ${context.availableBusinessImpactCategories.join(', ')}
 
 Respond in the following JSON format:
 {
-  "problemDefinition": "Clear, concise problem description (30-50 words)",
+  "problemDefinitions": [
+    "First problem definition (30-50 words) - focus on technical aspects",
+    "Second problem definition (30-50 words) - focus on business impact", 
+    "Third problem definition (30-50 words) - focus on user experience"
+  ],
+  "question": "One insightful question that should be asked to better understand or solve this problem",
   "issueType": "One of the available issue types",
   "severity": "One of the available severity levels", 
   "businessImpact": "One of the available business impact categories",
@@ -233,7 +240,8 @@ Focus on:
 - Technical accuracy based on the information provided
 - Appropriate severity assessment
 - Realistic business impact evaluation
-- Clear, actionable problem definition`;
+- Clear, actionable problem definitions from multiple angles
+- Thought-provoking question that adds value to problem understanding`;
     }
 
     /**
@@ -268,8 +276,20 @@ Focus on:
     validateLLMResponse(response) {
         const errors = [];
 
-        if (!response.problemDefinition || typeof response.problemDefinition !== 'string') {
-            errors.push('problemDefinition is required and must be a string');
+        if (!response.problemDefinitions || !Array.isArray(response.problemDefinitions)) {
+            errors.push('problemDefinitions is required and must be an array');
+        } else if (response.problemDefinitions.length !== 3) {
+            errors.push('problemDefinitions must contain exactly 3 definitions');
+        } else {
+            response.problemDefinitions.forEach((def, index) => {
+                if (typeof def !== 'string' || def.trim().length === 0) {
+                    errors.push(`problemDefinitions[${index}] must be a non-empty string`);
+                }
+            });
+        }
+
+        if (!response.question || typeof response.question !== 'string' || response.question.trim().length === 0) {
+            errors.push('question is required and must be a non-empty string');
         }
 
         if (!response.issueType || !ISSUE_TYPE_LIST.includes(response.issueType)) {
@@ -298,8 +318,14 @@ Focus on:
      * Get default response when LLM fails
      */
     getDefaultResponse(context) {
+        const shortDesc = context.shortDescription.substring(0, 30);
         return {
-            problemDefinition: `Issue with ${context.shortDescription.substring(0, 30)}...`,
+            problemDefinitions: [
+                `Technical issue affecting ${shortDesc}...`,
+                `Business process problem with ${shortDesc}...`,
+                `User experience issue related to ${shortDesc}...`
+            ],
+            question: `What specific steps can be taken to resolve this ${shortDesc} issue?`,
             issueType: config.problemStatement.defaultIssueType,
             severity: config.problemStatement.defaultSeverity,
             businessImpact: config.problemStatement.defaultBusinessImpact,

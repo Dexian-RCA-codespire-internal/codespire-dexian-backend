@@ -54,7 +54,8 @@ class ProblemStatementService {
                     logCount: inputData.serverLogs ? inputData.serverLogs.length : 0
                 },
                 problemStatement: {
-                    problemDefinition: result.data.problemDefinition,
+                    problemDefinitions: result.data.problemDefinitions,
+                    question: result.data.question,
                     issueType: result.data.issueType,
                     severity: result.data.severity,
                     businessImpact: result.data.businessImpact,
@@ -62,7 +63,7 @@ class ProblemStatementService {
                 },
                 processingTimeMs: processingTime,
                 metadata: {
-                    wordCount: result.data.problemDefinition.split(' ').length,
+                    wordCount: result.data.problemDefinitions[0].split(' ').length,
                     llmProvider: config.llm.provider,
                     temperature: config.problemStatement.temperature,
                     generatedAt: result.data.generatedAt
@@ -83,7 +84,12 @@ class ProblemStatementService {
      */
     generateSkeletonResponse(inputData) {
         const skeletonProblemStatement = {
-            problemDefinition: "Analyzing issue details and server logs to generate comprehensive problem statement...",
+            problemDefinitions: [
+                "Analyzing issue details and server logs to generate comprehensive problem statement...",
+                "Evaluating business impact and operational considerations...",
+                "Assessing user experience and workflow implications..."
+            ],
+            question: "Generating insightful question to better understand this issue...",
             issueType: "Loading...",
             severity: "Loading...",
             businessImpact: "Loading...",
@@ -211,7 +217,8 @@ class ProblemStatementService {
                     logCount: inputData.serverLogs ? inputData.serverLogs.length : 0
                 },
                 problemStatement: {
-                    problemDefinition: result.data.problemDefinition,
+                    problemDefinitions: result.data.problemDefinitions,
+                    question: result.data.question,
                     issueType: result.data.issueType,
                     severity: result.data.severity,
                     businessImpact: result.data.businessImpact,
@@ -219,7 +226,7 @@ class ProblemStatementService {
                 },
                 processingTimeMs: processingTime,
                 metadata: {
-                    wordCount: result.data.problemDefinition.split(' ').length,
+                    wordCount: result.data.problemDefinitions[0].split(' ').length,
                     llmProvider: customConfig.llm.provider,
                     temperature: customConfig.problemStatement.temperature,
                     customOptions: options,
