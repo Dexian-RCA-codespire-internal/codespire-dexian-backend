@@ -21,6 +21,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
+const { slaMonitoringService } = require('./services/slaMonitoringService');
 const config = require('./config');
 
 
@@ -38,7 +39,7 @@ app.use(cors({
     process.env.FRONTEND_URL || 'http://localhost:3001',
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
@@ -325,6 +326,15 @@ server.listen(PORT, async () => {
     }
   } else {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+  }
+
+  // Initialize SLA Monitoring Service
+  try {
+    console.log('🚀 Initializing SLA monitoring service...');
+    await slaMonitoringService.initialize();
+    console.log('✅ SLA monitoring service initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize SLA monitoring service:', error);
   }
 });
 

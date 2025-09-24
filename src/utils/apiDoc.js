@@ -110,6 +110,23 @@ const doc = {
       responses: commonResponses.created,
       requiresAuth: true
     });
+  },
+
+  /**
+   * Quick documentation for simple PATCH endpoints
+   * @param {string} path - Endpoint path
+   * @param {string} summary - Brief description
+   * @param {string[]} tags - Tags for grouping (optional)
+   */
+  patch: (path, summary, tags = ['API']) => {
+    return autoDoc({
+      method: 'patch',
+      path,
+      summary,
+      tags,
+      responses: commonResponses.successItem,
+      requiresAuth: true
+    });
   }
 };
 
