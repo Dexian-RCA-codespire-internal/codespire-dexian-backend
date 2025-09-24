@@ -15,6 +15,7 @@ const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
 const problemStatementRoutes = require('./problemStatement');
 const timelineContextRoutes = require('./timelineContext');
+const impactAssessmentRoutes = require('./impactAssessment');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -30,6 +31,7 @@ router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
 router.use('/problem-statement', problemStatementRoutes);
 router.use('/timeline-context', timelineContextRoutes);
+router.use('/impact-assessment', impactAssessmentRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -51,7 +53,8 @@ router.get('/', (req, res) => {
       chat: '/chat',
       playbooks: '/playbooks',
       problemStatement: '/problem-statement',
-      timelineContext: '/timeline-context'
+      timelineContext: '/timeline-context',
+      impactAssessment: '/impact-assessment'
     },
     documentation: {
       swagger: '/api/docs',
