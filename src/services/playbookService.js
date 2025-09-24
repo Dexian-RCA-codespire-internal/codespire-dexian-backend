@@ -82,7 +82,7 @@ class PlaybookService {
   async createPlaybook(playbookData) {
     try {
       // Validate required fields
-      const requiredFields = ['playbook_id', 'title', 'description', 'steps', 'outcome'];
+      const requiredFields = ['playbook_id', 'title', 'description', 'triggers'];
       for (const field of requiredFields) {
         if (!playbookData[field]) {
           return {
@@ -92,22 +92,22 @@ class PlaybookService {
         }
       }
 
-      // Validate steps
-      if (!Array.isArray(playbookData.steps) || playbookData.steps.length === 0) {
+      // Validate triggers
+      if (!Array.isArray(playbookData.triggers) || playbookData.triggers.length === 0) {
         return {
           success: false,
-          error: 'At least one step is required'
+          error: 'At least one trigger is required'
         };
       }
 
-      // Validate each step
-      for (const step of playbookData.steps) {
-        const stepRequiredFields = ['step_id', 'title', 'action', 'expected_outcome'];
-        for (const field of stepRequiredFields) {
-          if (!step[field]) {
+      // Validate each trigger
+      for (const trigger of playbookData.triggers) {
+        const triggerRequiredFields = ['trigger_id', 'title', 'action', 'expected_outcome'];
+        for (const field of triggerRequiredFields) {
+          if (!trigger[field]) {
             return {
               success: false,
-              error: `Missing required field in step: ${field}`
+              error: `Missing required field in trigger: ${field}`
             };
           }
         }
@@ -154,23 +154,23 @@ class PlaybookService {
    */
   async updatePlaybook(id, updateData) {
     try {
-      // Validate steps if provided
-      if (updateData.steps) {
-        if (!Array.isArray(updateData.steps) || updateData.steps.length === 0) {
+      // Validate triggers if provided
+      if (updateData.triggers) {
+        if (!Array.isArray(updateData.triggers) || updateData.triggers.length === 0) {
           return {
             success: false,
-            error: 'At least one step is required'
+            error: 'At least one trigger is required'
           };
         }
 
-        // Validate each step
-        for (const step of updateData.steps) {
-          const stepRequiredFields = ['step_id', 'title', 'action', 'expected_outcome'];
-          for (const field of stepRequiredFields) {
-            if (!step[field]) {
+        // Validate each trigger
+        for (const trigger of updateData.triggers) {
+          const triggerRequiredFields = ['trigger_id', 'title', 'action', 'expected_outcome'];
+          for (const field of triggerRequiredFields) {
+            if (!trigger[field]) {
               return {
                 success: false,
-                error: `Missing required field in step: ${field}`
+                error: `Missing required field in trigger: ${field}`
               };
             }
           }
@@ -551,6 +551,32 @@ class PlaybookService {
         error: 'Failed to get playbook statistics',
         details: error.message
       };
+    }
+  }
+
+  /**
+   * Get playbooks by their IDs
+   * @param {Array} playbookIds - Array of playbook IDs
+   * @returns {Promise<Array>} Array of playbooks
+   */
+  async getPlaybooksByIds(playbookIds) {
+    try {
+      console.log('🔍 Getting playbooks by IDs:', playbookIds);
+      
+      if (!Array.isArray(playbookIds) || playbookIds.length === 0) {
+        throw new Error('playbookIds must be a non-empty array');
+      }
+
+      const playbooks = await Playbook.find({
+        playbook_id: { $in: playbookIds },
+        is_active: true
+      }).sort({ createdAt: -1 });
+
+      console.log(`✅ Found ${playbooks.length} playbooks by IDs`);
+      return playbooks;
+    } catch (error) {
+      console.error('❌ Error getting playbooks by IDs:', error);
+      throw error;
     }
   }
 }

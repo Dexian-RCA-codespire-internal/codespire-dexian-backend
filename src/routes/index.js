@@ -11,6 +11,7 @@ const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
 const ticketResolutionRoutes = require('./ticketResolution');
 const playbookRoutes = require('./playbooks');
+const aiRoutes = require('./ai');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -22,6 +23,7 @@ router.use('/ticket-similarity', ticketSimilarityRoutes);
 router.use('/tickets', ticketResolutionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
+router.use('/ai', aiRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -39,7 +41,8 @@ router.get('/', (req, res) => {
       ticketSimilarity: '/ticket-similarity',
       ticketResolution: '/tickets/resolve',
       chat: '/chat',
-      playbooks: '/playbooks'
+      playbooks: '/playbooks',
+      ai: '/ai'
     },
     documentation: {
       swagger: '/api/docs',

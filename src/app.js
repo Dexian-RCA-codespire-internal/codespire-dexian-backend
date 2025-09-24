@@ -58,26 +58,7 @@ app.use((req, res, next) => {
   next();
 });
 
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check endpoint
- *     description: Returns the current health status of the server
- *     tags:
- *       - Health
- *     responses:
- *       200:
- *         description: Server is healthy
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/HealthCheck'
- *             example:
- *               status: "OK"
- *               timestamp: "2024-01-15T10:30:00.000Z"
- *               uptime: 3600
- */
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -114,6 +95,9 @@ setupSwagger(app, PORT);
 
 // API routes
 app.use('/api/v1', require('./routes'));
+
+// Add route alias for frontend compatibility (without /v1)
+app.use('/api', require('./routes'));
 
 // Note: Password reset is now handled via OTP through /api/v1/auth routes
 

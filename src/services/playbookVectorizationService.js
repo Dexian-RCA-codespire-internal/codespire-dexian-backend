@@ -38,7 +38,7 @@ class PlaybookVectorizationService {
                     fieldWeights: {
                         title: 0.3,
                         description: 0.4,
-                        steps: 0.2,
+                        triggers: 0.2,
                         tags: 0.1
                     }
                 }
@@ -82,9 +82,8 @@ class PlaybookVectorizationService {
         console.log('📄 Field Contents:');
         console.log('   - title:', playbook.title?.substring(0, 100) + (playbook.title?.length > 100 ? '...' : ''));
         console.log('   - description:', playbook.description?.substring(0, 100) + (playbook.description?.length > 100 ? '...' : ''));
-        console.log('   - steps count:', playbook.steps?.length || 0);
+        console.log('   - triggers count:', playbook.triggers?.length || 0);
         console.log('   - tags:', playbook.tags?.join(', ') || 'MISSING');
-        console.log('   - outcome:', playbook.outcome?.substring(0, 100) + (playbook.outcome?.length > 100 ? '...' : ''));
 
         // Add title with weight
         if (playbook.title) {
@@ -100,14 +99,14 @@ class PlaybookVectorizationService {
             console.log(`   📝 Description: repeated ${Math.ceil(weights.description * 10)} times`);
         }
 
-        // Add steps with weight
-        if (playbook.steps && Array.isArray(playbook.steps)) {
-            const stepsText = playbook.steps.map(step => 
-                `${step.title || ''} ${step.action || ''} ${step.expected_outcome || ''}`
+        // Add triggers with weight
+        if (playbook.triggers && Array.isArray(playbook.triggers)) {
+            const triggersText = playbook.triggers.map(trigger => 
+                `${trigger.title || ''} ${trigger.action || ''} ${trigger.expected_outcome || ''}`
             ).join(' ');
-            const stepsRepeated = `${stepsText} `.repeat(Math.ceil(weights.steps * 10));
-            combinedText += stepsRepeated;
-            console.log(`   📝 Steps: repeated ${Math.ceil(weights.steps * 10)} times`);
+            const triggersRepeated = `${triggersText} `.repeat(Math.ceil(weights.triggers * 10));
+            combinedText += triggersRepeated;
+            console.log(`   📝 Triggers: repeated ${Math.ceil(weights.triggers * 10)} times`);
         }
 
         // Add tags with weight
@@ -118,11 +117,6 @@ class PlaybookVectorizationService {
             console.log(`   📝 Tags: repeated ${Math.ceil(weights.tags * 10)} times`);
         }
 
-        // Add outcome
-        if (playbook.outcome) {
-            combinedText += ` ${playbook.outcome}`;
-            console.log(`   📝 Outcome: added once`);
-        }
 
         console.log('🔤 Generated Text Length:', combinedText.trim().length);
         console.log('📊 Weight Distribution:');
@@ -148,7 +142,7 @@ class PlaybookVectorizationService {
             description: playbook.description,
             priority: playbook.priority,
             tags: playbook.tags || [],
-            outcome: playbook.outcome,
+            triggers: playbook.triggers || [], // ✅ Add triggers data to Qdrant payload
             created_by: playbook.created_by,
             is_active: playbook.is_active,
             created_at: playbook.createdAt,
@@ -340,7 +334,7 @@ class PlaybookVectorizationService {
                     description: result.payload.description,
                     priority: result.payload.priority,
                     tags: result.payload.tags,
-                    outcome: result.payload.outcome,
+                    triggers: result.payload.triggers || [], // ✅ Include triggers in search results
                     similarity_score: result.score,
                     created_at: result.payload.created_at,
                     updated_at: result.payload.updated_at

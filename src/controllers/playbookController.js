@@ -123,8 +123,32 @@ class PlaybookController {
    */
   async createPlaybook(req, res) {
     try {
-      const playbookData = req.body;
-      const result = await playbookService.createPlaybook(playbookData);
+      const { triggers, ...otherData } = req.body;
+
+      // Only accept new "triggers" format - no backward compatibility
+      if (!triggers || !Array.isArray(triggers) || triggers.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggers array is required and must not be empty'
+        });
+      }
+
+      // Validate triggers structure
+      for (const trigger of triggers) {
+        if (!trigger.trigger_id || !trigger.title || !trigger.action || !trigger.expected_outcome) {
+          return res.status(400).json({
+            success: false,
+            error: 'Each trigger must have trigger_id, title, action, and expected_outcome'
+          });
+        }
+      }
+
+      const processedData = {
+        ...otherData,
+        triggers: triggers
+      };
+
+      const result = await playbookService.createPlaybook(processedData);
       
       if (result.success) {
         res.status(201).json(result);
@@ -180,8 +204,34 @@ class PlaybookController {
   async updatePlaybook(req, res) {
     try {
       const { id } = req.params;
-      const updateData = req.body;
-      const result = await playbookService.updatePlaybook(id, updateData);
+      const { triggers, ...otherData } = req.body;
+
+      // Only accept new "triggers" format - no backward compatibility
+      if (triggers && (!Array.isArray(triggers) || triggers.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggers array must not be empty if provided'
+        });
+      }
+
+      // Validate triggers structure if provided
+      if (triggers && triggers.length > 0) {
+        for (const trigger of triggers) {
+          if (!trigger.trigger_id || !trigger.title || !trigger.action || !trigger.expected_outcome) {
+            return res.status(400).json({
+              success: false,
+              error: 'Each trigger must have trigger_id, title, action, and expected_outcome'
+            });
+          }
+        }
+      }
+
+      const processedData = {
+        ...otherData,
+        ...(triggers && { triggers: triggers })
+      };
+
+      const result = await playbookService.updatePlaybook(id, processedData);
       
       if (result.success) {
         res.status(200).json(result);
@@ -676,6 +726,29 @@ class PlaybookController {
         error: 'Internal server error',
         details: error.message
       });
+    }
+  }
+
+  /**
+   * Get playbooks by their IDs
+   * @param {Array} playbookIds - Array of playbook IDs
+   * @returns {Promise<Array>} Array of playbooks
+   */
+  async getPlaybooksByIds(playbookIds) {
+    try {
+      console.log('🔍 Getting playbooks by IDs:', playbookIds);
+      
+      if (!Array.isArray(playbookIds) || playbookIds.length === 0) {
+        throw new Error('playbookIds must be a non-empty array');
+      }
+
+      const playbooks = await playbookService.getPlaybooksByIds(playbookIds);
+      console.log(`✅ Found ${playbooks.length} playbooks`);
+      
+      return playbooks;
+    } catch (error) {
+      console.error('❌ Error getting playbooks by IDs:', error);
+      throw error;
     }
   }
 }
