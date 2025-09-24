@@ -16,6 +16,7 @@ const playbookRoutes = require('./playbooks');
 const problemStatementRoutes = require('./problemStatement');
 const timelineContextRoutes = require('./timelineContext');
 const impactAssessmentRoutes = require('./impactAssessment');
+const textEnhancementRoutes = require('./textEnhancement');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -32,6 +33,7 @@ router.use('/playbooks', playbookRoutes);
 router.use('/problem-statement', problemStatementRoutes);
 router.use('/timeline-context', timelineContextRoutes);
 router.use('/impact-assessment', impactAssessmentRoutes);
+router.use('/text-enhancement', textEnhancementRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -54,7 +56,8 @@ router.get('/', (req, res) => {
       playbooks: '/playbooks',
       problemStatement: '/problem-statement',
       timelineContext: '/timeline-context',
-      impactAssessment: '/impact-assessment'
+      impactAssessment: '/impact-assessment',
+      textEnhancement: '/text-enhancement'
     },
     documentation: {
       swagger: '/api/docs',
