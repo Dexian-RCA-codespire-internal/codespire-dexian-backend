@@ -106,7 +106,7 @@ function generateCustomEmailHtmlTemplate(data) {
     </div>
   `;
 
-  return generateBaseHtml(title, htmlContent, '#007bff');
+  return generateBaseHtml(title, htmlContent, '#84CC16');
 }
 
 function generateCustomEmailTextTemplate(data) {

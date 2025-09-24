@@ -9,12 +9,12 @@ function getTicketAssignmentEmailSubject(data) {
 function getPriorityColor(priority) {
   const colors = {
     'Low': '#28a745',
-    'Normal': '#007bff',
+    'Normal': '#84CC16',
     'High': '#ffc107',
     'Critical': '#dc3545',
     'Urgent': '#dc3545'
   };
-  return colors[priority] || '#007bff';
+  return colors[priority] || '#84CC16';
 }
 
 function generateTicketAssignmentEmailHtmlTemplate(data) {
@@ -47,14 +47,14 @@ function generateTicketAssignmentEmailHtmlTemplate(data) {
       ${slaHours ? `<p><strong>SLA:</strong> ${slaHours} hours</p>` : ''}
     </div>
 
-    ${ticketUrl ? createButton('View Ticket', ticketUrl, '#007bff') : ''}
+    ${ticketUrl ? createButton('View Ticket', ticketUrl, '#84CC16') : ''}
     
     <div class="warning">
       <strong>Action Required:</strong> Please review and start working on this ticket as soon as possible.
     </div>
   `;
 
-  return generateBaseHtml('Ticket Assignment', content, '#007bff');
+  return generateBaseHtml('Ticket Assignment', content, '#84CC16');
 }
 
 function generateTicketAssignmentEmailTextTemplate(data) {

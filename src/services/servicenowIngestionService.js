@@ -295,14 +295,15 @@ const fetchTicketsAndSave = async (options = {}) => {
               if (user) {
                 const ticketEmailData = {
                   ticketId: savedTicket.ticket_id,
+                  mongoId: savedTicket._id,
                   title: savedTicket.short_description || 'New Ticket',
                   description: savedTicket.description || 'Ticket description not available',
                   priority: savedTicket.priority || 'Normal',
                   assignee: 'System',
                   createdBy: 'ServiceNow',
-                  createdAt: new Date(),
+                  createdAt: savedTicket.createdAt,
                   category: savedTicket.category || 'General',
-                  ticketUrl: 'http://localhost:3000/tickets',
+                  ticketUrl: `http://localhost:3001/analysis/${savedTicket._id}/${savedTicket.ticket_id}`,
                   slaHours: 24
                 };
                 await emailService.sendNewTicketEmailTemplate([user.email], ticketEmailData);

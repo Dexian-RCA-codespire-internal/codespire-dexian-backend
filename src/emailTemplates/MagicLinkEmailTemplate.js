@@ -14,7 +14,7 @@ function generateMagicLinkEmailHtmlTemplate(data) {
     <p>Thank you for registering with Test BG App. To complete your registration and verify your email address, please click the magic link below:</p>
     
     <div style="text-align: center;">
-      <a href="${magicLink}" style="background: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; margin: 20px 0; font-weight: bold; text-align: center;">Verify Email Address</a>
+      <a href="${magicLink}" style="background:rgb(0, 255, 42); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; margin: 20px 0; font-weight: bold; text-align: center;">Verify Email Address</a>
     </div>
     
     <p>Or copy and paste this link into your browser:</p>
@@ -31,7 +31,7 @@ function generateMagicLinkEmailHtmlTemplate(data) {
     <p>Best regards,<br>The Test BG App Team</p>
   `;
 
-  return generateBaseHtml('Email Verification - Magic Link', content, '#007bff');
+  return generateBaseHtml('Email Verification - Magic Link', content, '#84CC16');
 }
 
 function generateMagicLinkEmailTextTemplate(data) {

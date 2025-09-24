@@ -9,12 +9,12 @@ function getSLABreachWarningEmailSubject(data) {
 function getPriorityColor(priority) {
   const colors = {
     'Low': '#28a745',
-    'Normal': '#007bff',
+    'Normal': '#84CC16',
     'High': '#ffc107',
     'Critical': '#dc3545',
     'Urgent': '#dc3545'
   };
-  return colors[priority] || '#007bff';
+  return colors[priority] || '#84CC16';
 }
 
 function getTimeColor(timeRemaining) {
@@ -25,7 +25,7 @@ function getTimeColor(timeRemaining) {
 
   if (totalMinutes <= 30) return '#dc3545'; // Red for critical
   if (totalMinutes <= 120) return '#ffc107'; // Yellow for warning
-  return '#007bff'; // Blue for normal
+  return '#84CC16'; // Green for normal
 }
 
 function generateSLABreachWarningEmailHtmlTemplate(data) {

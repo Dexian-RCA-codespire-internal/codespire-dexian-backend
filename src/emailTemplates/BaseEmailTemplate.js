@@ -1,9 +1,15 @@
 // new file servicenow - Base Email Template Functions
+const config = require('../config');
+
+// Email assets configuration from config
+const emailAssets = config.email.assets;
+
 const baseStyles = {
   body: "font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;",
   container: "background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);",
   header: "text-align: center; margin-bottom: 30px;",
   logo: "font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;",
+  logoImage: "max-width: 120px; height: auto; margin-bottom: 10px;",
   footer: "margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; text-align: center;",
   button: "display: inline-block; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; text-align: center;",
   warning: "background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0;",
@@ -26,6 +32,7 @@ function generateBaseHtml(title, content, headerColor = '#2c3e50') {
         .container { ${baseStyles.container} }
         .header { ${baseStyles.header} }
         .logo { ${baseStyles.logo} }
+        .logo-image { ${baseStyles.logoImage} }
         .footer { ${baseStyles.footer} }
         .button { ${baseStyles.button} }
         .warning { ${baseStyles.warning} }
@@ -38,7 +45,8 @@ function generateBaseHtml(title, content, headerColor = '#2c3e50') {
     <body>
       <div class="container">
         <div class="header">
-          <div class="logo">Test BG App</div>
+          <img src="${emailAssets.logo.url}" alt="${emailAssets.logo.alt}" class="logo-image" width="${emailAssets.logo.width}" height="${emailAssets.logo.height}">
+          <div class="logo">${emailAssets.companyName}</div>
           <div class="header-bg">
             <h1>${title}</h1>
           </div>
@@ -46,7 +54,8 @@ function generateBaseHtml(title, content, headerColor = '#2c3e50') {
         ${content}
         <div class="footer">
           <p>This is an automated message. Please do not reply to this email.</p>
-          <p>&copy; 2024 Test BG App. All rights reserved.</p>
+          <p>&copy; 2024 ${emailAssets.companyName}. All rights reserved.</p>
+          <p>Need help? Contact us at <a href="mailto:${emailAssets.supportEmail}">${emailAssets.supportEmail}</a></p>
         </div>
       </div>
     </body>
@@ -55,7 +64,7 @@ function generateBaseHtml(title, content, headerColor = '#2c3e50') {
 }
 
 // Helper function to create buttons
-function createButton(text, url, color = '#007bff') {
+function createButton(text, url, color = '#84CC16') {
   return `
     <div style="text-align: center;">
       <a href="${url}" class="button" style="background-color: ${color};">${text}</a>

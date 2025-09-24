@@ -9,17 +9,18 @@ function getNewTicketEmailSubject(data) {
 function getPriorityColor(priority) {
   const colors = {
     'Low': '#28a745',
-    'Normal': '#007bff',
+    'Normal': '#84CC16',
     'High': '#ffc107',
     'Critical': '#dc3545',
     'Urgent': '#dc3545'
   };
-  return colors[priority] || '#007bff';
+  return colors[priority] || '#84CC16';
 }
 
 function generateNewTicketEmailHtmlTemplate(data) {
   const { 
     ticketId, 
+    mongoId,
     title, 
     description, 
     priority = 'Normal', 
@@ -51,24 +52,25 @@ function generateNewTicketEmailHtmlTemplate(data) {
 
     ${description ? `
       <h3>Description</h3>
-      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff;">
+      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #84CC16;">
         ${description}
       </div>
     ` : ''}
 
-    ${ticketUrl ? createButton('View Ticket', ticketUrl, '#007bff') : ''}
+    ${ticketUrl ? createButton('Analyze Ticket', ticketUrl, '#84CC16') : ''}
     
     <div class="warning">
       <strong>Note:</strong> Please respond to this ticket within the specified SLA timeframe.
     </div>
   `;
 
-  return generateBaseHtml('New Ticket Created', content, '#007bff');
+  return generateBaseHtml('New Ticket Created', content, '#84CC16');
 }
 
 function generateNewTicketEmailTextTemplate(data) {
   const { 
     ticketId, 
+    mongoId,
     title, 
     description, 
     priority = 'Normal', 
@@ -98,13 +100,13 @@ ${slaInfo ? `- ${slaInfo}` : ''}
 
 ${description ? `Description:\n${description}\n` : ''}
 
-${ticketUrl ? `View Ticket: ${ticketUrl}\n` : ''}
+${ticketUrl ? `Analyze Ticket: ${ticketUrl}\n` : ''}
 
 Note: Please respond to this ticket within the specified SLA timeframe.
 
 ---
 This is an automated message. Please do not reply to this email.
-© 2024 Test BG App. All rights reserved.
+© 2024 Dexian. All rights reserved.
   `;
 }
 

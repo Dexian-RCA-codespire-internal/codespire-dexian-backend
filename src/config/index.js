@@ -61,6 +61,17 @@ const config = {
       password: process.env.SMTP_PASSWORD,
       fromName: process.env.SMTP_FROM_NAME || 'Test BG App',
       fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@test-bg.com'
+    },
+    // Email assets configuration
+    assets: {
+      logo: {
+        url: process.env.EMAIL_LOGO_URL || `${process.env.BACKEND_URL || 'http://localhost:8081'}/email-assets/logo.png`,
+        alt: process.env.EMAIL_LOGO_ALT || 'Dexian',
+        width: process.env.EMAIL_LOGO_WIDTH || '120',
+        height: process.env.EMAIL_LOGO_HEIGHT || '40'
+      },
+      companyName: process.env.EMAIL_COMPANY_NAME || 'Dexian',
+      supportEmail: process.env.EMAIL_SUPPORT_EMAIL || 'support@test.com'
     }
   },
 
