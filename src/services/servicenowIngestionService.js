@@ -2,9 +2,11 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const User = require('../models/User');
 const { webSocketService } = require('./websocketService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
+const emailService = require('./emailService');
 
 // Bulk Import State Schema
 const bulkImportStateSchema = new mongoose.Schema({
@@ -251,6 +253,30 @@ const fetchTicketsAndSave = async (options = {}) => {
             isNewTicket = true;
             // Emit WebSocket event for new ticket
           webSocketService.emitNewTicket(newTicket.toObject());
+            
+            // Send email notification for new ticket
+            try {
+              const user = await User.findOne({ status: 'active' }).sort({ lastLoginAt: -1 });
+              if (user) {
+                const ticketEmailData = {
+                  ticketId: savedTicket.ticket_id,
+                  title: savedTicket.short_description || 'New Ticket',
+                  description: savedTicket.description || 'Ticket description not available',
+                  priority: savedTicket.priority || 'Normal',
+                  assignee: 'System',
+                  createdBy: 'ServiceNow',
+                  createdAt: new Date(),
+                  category: savedTicket.category || 'General',
+                  ticketUrl: 'http://localhost:3000/tickets',
+                  slaHours: 24
+                };
+                await emailService.sendNewTicketEmailTemplate([user.email], ticketEmailData);
+                console.log(`✅ New ticket email sent to ${user.email}`);
+              }
+            } catch (emailError) {
+              console.error('❌ Email notification failed:', emailError.message);
+            }
+            
             console.log(`✅ Created new ticket: ${ticketData.number}`);
           } catch (saveError) {
             console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
