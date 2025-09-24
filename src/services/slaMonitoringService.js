@@ -8,6 +8,7 @@ const cron = require('node-cron');
 const SLA = require('../models/SLA');
 const { notificationService } = require('./notificationService');
 const { webSocketService } = require('./websocketService');
+const emailService = require('./emailService');
 const moment = require('moment-timezone');
 
 class SLAMonitoringService {
@@ -469,6 +470,14 @@ class SLAMonitoringService {
       } catch (wsError) {
         console.warn('⚠️ Could not emit SLA WebSocket event:', wsError.message);
       }
+
+      // Send email notifications for SLA status changes
+      try {
+        await this.sendSLAEmailNotification(sla, statusInfo);
+      } catch (emailError) {
+        console.warn(`⚠️ Could not send SLA email notification for ticket ${sla.ticket_id}:`, emailError.message);
+        // Don't throw error - email failure shouldn't stop other notifications
+      }
       
       console.log(`📢 SLA notification sent: ${title} - ${message}`);
       
@@ -479,6 +488,85 @@ class SLAMonitoringService {
   }
 
   /**
+   * Send SLA email notification
+   * @param {Object} sla - SLA record
+   * @param {Object} statusInfo - Current SLA status information
+   */
+  async sendSLAEmailNotification(sla, statusInfo) {
+    try {
+      const { status, timeLeft, percentage } = statusInfo;
+      
+      // Send emails for warning, critical, and breached statuses
+      if (!['warning', 'critical', 'breached'].includes(status)) {
+        return;
+      }
+
+      // Get the currently logged-in user (similar to new ticket email logic)
+      const User = require('../models/User');
+      const user = await User.findOne({ status: 'active' }).sort({ lastLoginAt: -1 });
+      
+      if (!user) {
+        console.warn('⚠️ No active user found for SLA email notification');
+        return;
+      }
+
+      // Prepare email data based on SLA status
+      let title, description, urgencyLevel;
+      
+      switch (status) {
+        case 'warning':
+          title = 'SLA Warning - Ticket Requires Attention';
+          description = `This ticket has reached the SLA warning phase and requires immediate attention to prevent SLA breach.`;
+          urgencyLevel = 'Warning';
+          break;
+        case 'critical':
+          title = 'SLA Critical - Immediate Action Required';
+          description = `This ticket is in the SLA critical phase and requires URGENT attention to avoid SLA breach.`;
+          urgencyLevel = 'Critical';
+          break;
+        case 'breached':
+          title = 'SLA BREACHED - Emergency Action Required';
+          description = `This ticket has BREACHED its SLA and requires IMMEDIATE emergency action.`;
+          urgencyLevel = 'Breached';
+          break;
+        default:
+          title = 'SLA Alert - Ticket Requires Attention';
+          description = `This ticket requires attention regarding its SLA status.`;
+          urgencyLevel = 'Alert';
+      }
+
+      const emailData = {
+        ticketId: sla.ticket_id,
+        title: title,
+        description: description,
+        priority: sla.priority,
+        assignee: 'System', // Constant value as per user's request
+        createdBy: 'ServiceNow', // Constant value
+        createdAt: sla.opened_time,
+        category: sla.category || 'General',
+        timeRemaining: timeLeft,
+        percentage: percentage,
+        slaHours: this.slaTargets[sla.priority] || 24,
+        ticketUrl: `http://localhost:3001/analysis/${sla.ticket_mongo_id}/${sla.ticket_id}`,
+        urgencyLevel: urgencyLevel
+      };
+
+      // Send email using the SLA breach warning template
+      const emailResult = await emailService.sendSLABreachWarningEmailTemplate([user.email], emailData);
+      
+      if (emailResult.success) {
+        console.log(`✅ SLA ${status} email sent to ${user.email} for ticket ${sla.ticket_id}`);
+      } else {
+        console.error(`❌ Failed to send SLA ${status} email for ticket ${sla.ticket_id}:`, emailResult.error);
+      }
+
+    } catch (error) {
+      console.error(`❌ Error sending SLA email notification for ticket ${sla.ticket_id}:`, error);
+      throw error;
+    }
+  }
+
+n  /**
    * Update SLA record with new notification status
    * @param {Object} sla - SLA record
    * @param {String} newStatus - New notification status
