@@ -2,7 +2,7 @@
 const { generateBaseHtml } = require('./BaseEmailTemplate');
 
 function getWelcomeEmailSubject(data) {
-  return 'Welcome to Test BG App!';
+  return 'Welcome to Dexian!';
 }
 
 function generateWelcomeEmailHtmlTemplate(data) {
@@ -26,10 +26,10 @@ function generateWelcomeEmailHtmlTemplate(data) {
     
     <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
     
-    <p>Welcome aboard!<br>The Test BG App Team</p>
+    <p>Welcome aboard!<br>The Dexian Team</p>
   `;
 
-  return generateBaseHtml('Welcome to Test BG App!', content, '#28a745');
+  return generateBaseHtml('Welcome to Dexian App!', content, '#28a745');
 }
 
 function generateWelcomeEmailTextTemplate(data) {
@@ -43,7 +43,7 @@ function generateWelcomeEmailTextTemplate(data) {
 - Connect with other users`;
 
   return `
-Welcome to Test BG App!
+Welcome to Dexian App!
 
 Hello ${name || 'User'}!
 
@@ -55,11 +55,11 @@ ${featuresList}
 If you have any questions or need assistance, please don't hesitate to contact our support team.
 
 Welcome aboard!
-The Test BG App Team
+The Dexian Team
 
 ---
 This is an automated message. Please do not reply to this email.
-© 2024 Test BG App. All rights reserved.
+© 2024 Dexian App. All rights reserved.
   `;
 }
 

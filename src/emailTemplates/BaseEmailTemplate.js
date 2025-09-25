@@ -1,5 +1,7 @@
 // new file servicenow - Base Email Template Functions
 const config = require('../config');
+const { convertImageToBase64 } = require('../utils/imageToBase64');
+const path = require('path');
 
 // Email assets configuration from config
 const emailAssets = config.email.assets;
@@ -20,6 +22,11 @@ const baseStyles = {
 
 // Helper function to generate common HTML structure
 function generateBaseHtml(title, content, headerColor = '#2c3e50') {
+  // Convert logo to base64
+  const logoPath = path.join(__dirname, '../../public/email-assets/logo.png');
+  const logoBase64 = convertImageToBase64(logoPath);
+  console.log(logoBase64);
+  
   return `
     <!DOCTYPE html>
     <html>
@@ -45,7 +52,7 @@ function generateBaseHtml(title, content, headerColor = '#2c3e50') {
     <body>
       <div class="container">
         <div class="header">
-          <img src="${emailAssets.logo.url}" alt="${emailAssets.logo.alt}" class="logo-image" width="${emailAssets.logo.width}" height="${emailAssets.logo.height}">
+          <img src="${logoBase64}" alt="${emailAssets.logo.alt}" class="logo-image" width="${emailAssets.logo.width}" height="${emailAssets.logo.height}">
           <div class="logo">${emailAssets.companyName}</div>
           <div class="header-bg">
             <h1>${title}</h1>

@@ -28,7 +28,7 @@ function generateMagicLinkEmailHtmlTemplate(data) {
       <strong>Security Notice:</strong> Never share this link with anyone. Our team will never ask for your verification link. If you didn't create an account with us, please ignore this email.
     </div>
     
-    <p>Best regards,<br>The Test BG App Team</p>
+    <p>Best regards,<br>Dexian Team</p>
   `;
 
   return generateBaseHtml('Email Verification - Magic Link', content, '#84CC16');
@@ -40,7 +40,7 @@ function generateMagicLinkEmailTextTemplate(data) {
   return `
 Hello ${name || 'User'}!
 
-Thank you for registering with Test BG App. To complete your registration and verify your email address, please click the magic link below:
+Thank you for registering with Dexian. To complete your registration and verify your email address, please click the magic link below:
 
 ${magicLink}
 
@@ -49,11 +49,11 @@ This link will expire in ${config.otp.expiryMinutes} minutes.
 Security Notice: Never share this link with anyone. Our team will never ask for your verification link. If you didn't create an account with us, please ignore this email.
 
 Best regards,
-The Test BG App Team
+The Dexian Team
 
 ---
 This is an automated message. Please do not reply to this email.
-© 2024 Test BG App. All rights reserved.
+© 2024 Dexian. All rights reserved.
   `;
 }
 

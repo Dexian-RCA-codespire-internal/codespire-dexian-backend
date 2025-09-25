@@ -11,7 +11,7 @@ function generatePasswordResetOTPEmailHtmlTemplate(data) {
   
   const content = `
     <h2>Hello ${name || 'User'}!</h2>
-    <p>We received a request to reset your password for your Test BG App account. Use the following OTP to reset your password:</p>
+    <p>We received a request to reset your password for your Dexian App account. Use the following OTP to reset your password:</p>
     
     <div style="background-color: #e74c3c; color: white; font-size: 32px; font-weight: bold; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; letter-spacing: 5px;">
       ${otp}
@@ -33,11 +33,11 @@ function generatePasswordResetOTPEmailTextTemplate(data) {
   const { name, otp } = data;
   
   return `
-Password Reset OTP - Test BG App
+Password Reset OTP - Dexian
 
 Hello ${name || 'User'}!
 
-We received a request to reset your password for your Test BG App account. Use the following OTP to reset your password:
+We received a request to reset your password for your Dexian App account. Use the following OTP to reset your password:
 
 ${otp}
 
@@ -48,11 +48,11 @@ Security Notice: Never share this OTP with anyone. Our team will never ask for y
 If you're having trouble, please contact our support team.
 
 Best regards,
-The Test BG App Team
+The Dexian App Team
 
 ---
-This email was sent from Test BG App. If you have any questions, please contact our support team.
-© 2024 Test BG App. All rights reserved.
+This email was sent from Dexian App. If you have any questions, please contact our support team.
+© 2024 Dexian App. All rights reserved.
   `;
 }
 

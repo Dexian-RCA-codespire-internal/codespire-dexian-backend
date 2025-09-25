@@ -91,7 +91,7 @@ ACTION REQUIRED: Please review and start working on this ticket as soon as possi
 
 ---
 This is an automated message. Please do not reply to this email.
-© 2024 Test BG App. All rights reserved.
+© 2024 Dexian App. All rights reserved.
   `;
 }
 

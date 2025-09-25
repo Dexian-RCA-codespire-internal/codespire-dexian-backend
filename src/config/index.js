@@ -65,7 +65,7 @@ const config = {
     // Email assets configuration
     assets: {
       logo: {
-        url: process.env.EMAIL_LOGO_URL,
+        url: process.env.EMAIL_LOGO_URL || 'http://localhost:8081/public/email-asset/logo.png',
         alt: process.env.EMAIL_LOGO_ALT || 'Dexian',
         width: process.env.EMAIL_LOGO_WIDTH || '120',
         height: process.env.EMAIL_LOGO_HEIGHT || '40'

@@ -101,7 +101,7 @@ Thank you for your patience! If you have any additional questions or concerns, p
 
 ---
 This is an automated message. Please do not reply to this email.
-© 2024 Test BG App. All rights reserved.
+© 2024 Dexian. All rights reserved.
   `;
 }
 

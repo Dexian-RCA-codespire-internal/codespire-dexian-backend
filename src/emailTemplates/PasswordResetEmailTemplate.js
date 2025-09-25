@@ -3,7 +3,7 @@ const { generateBaseHtml, createButton } = require('./BaseEmailTemplate');
 const config = require('../config');
 
 function getPasswordResetEmailSubject(data) {
-  return 'Password Reset - Test BG App';
+  return 'Password Reset - Dexian App';
 }
 
 function generatePasswordResetEmailHtmlTemplate(data) {
@@ -11,7 +11,7 @@ function generatePasswordResetEmailHtmlTemplate(data) {
   
   const content = `
     <h2>Hello ${name || 'User'}!</h2>
-    <p>We received a request to reset your password for your Test BG App account. If you made this request, click the button below to reset your password:</p>
+    <p>We received a request to reset your password for your Dexian App account. If you made this request, click the button below to reset your password:</p>
     
     <div style="text-align: center;">
       <a href="${resetUrl}" style="display: inline-block; background-color: #e74c3c; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; transition: background-color 0.3s;">Reset My Password</a>
@@ -38,11 +38,11 @@ function generatePasswordResetEmailTextTemplate(data) {
   const { name, resetUrl } = data;
   
   return `
-Password Reset - Test BG App
+Password Reset - Dexian App
 
 Hello ${name || 'User'}!
 
-We received a request to reset your password for your Test BG App account. If you made this request, click the link below to reset your password:
+We received a request to reset your password for your Dexian App account. If you made this request, click the link below to reset your password:
 
 ${resetUrl}
 
@@ -53,11 +53,11 @@ Security Notice: If you didn't request a password reset, please ignore this emai
 If you're having trouble, please contact our support team.
 
 Best regards,
-The Test BG App Team
+The Dexian App Team
 
 ---
-This email was sent from Test BG App. If you have any questions, please contact our support team.
-© 2024 Test BG App. All rights reserved.
+This email was sent from Dexian App. If you have any questions, please contact our support team.
+© 2024 Dexian App. All rights reserved.
   `;
 }
 
