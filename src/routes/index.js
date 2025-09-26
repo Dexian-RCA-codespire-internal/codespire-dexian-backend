@@ -17,6 +17,7 @@ const problemStatementRoutes = require('./problemStatement');
 const timelineContextRoutes = require('./timelineContext');
 const impactAssessmentRoutes = require('./impactAssessment');
 const textEnhancementRoutes = require('./textEnhancement');
+const rcaRootCauseRoutes = require('./rcaRootCause');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -34,6 +35,7 @@ router.use('/problem-statement', problemStatementRoutes);
 router.use('/timeline-context', timelineContextRoutes);
 router.use('/impact-assessment', impactAssessmentRoutes);
 router.use('/text-enhancement', textEnhancementRoutes);
+router.use('/rca-root-cause', rcaRootCauseRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -57,7 +59,8 @@ router.get('/', (req, res) => {
       problemStatement: '/problem-statement',
       timelineContext: '/timeline-context',
       impactAssessment: '/impact-assessment',
-      textEnhancement: '/text-enhancement'
+      textEnhancement: '/text-enhancement',
+      rcaRootCause: '/rca-root-cause'
     },
     documentation: {
       swagger: '/api/docs',
