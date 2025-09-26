@@ -188,7 +188,7 @@ The agent can be configured through the `config.js` file:
 ```javascript
 {
   llm: {
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash-exp',
     temperature: 0.3,
     maxTokens: 1000
   },
