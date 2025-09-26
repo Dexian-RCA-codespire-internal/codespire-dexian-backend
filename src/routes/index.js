@@ -13,6 +13,7 @@ const ticketResolutionRoutes = require('./ticketResolution');
 const notificationsRoutes = require('./notifications');
 const slaRoutes = require('./sla');
 const slaMonitoringRoutes = require('./slaMonitoring');
+const rbacRoutes = require('./rbac');
 
 const playbookRoutes = require('./playbooks');
 
@@ -29,6 +30,7 @@ router.use('/playbooks', playbookRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/sla', slaRoutes);
 router.use('/sla/monitoring', slaMonitoringRoutes);
+router.use('/rbac', rbacRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -47,7 +49,8 @@ router.get('/', (req, res) => {
       ticketResolution: '/tickets/resolve',
       chat: '/chat',
       notifications: '/notifications',
-      playbooks: '/playbooks'
+      playbooks: '/playbooks',
+      rbac: '/rbac'
     },
     documentation: {
       swagger: '/api/docs',

@@ -4,6 +4,7 @@ const Session = require('supertokens-node/recipe/session');
 const UserMetadata = require('supertokens-node/recipe/usermetadata');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
 const Dashboard = require('supertokens-node/recipe/dashboard');
+const UserRoles = require('supertokens-node/recipe/userroles');
 const config = require('./index');
 const emailService = require('../services/emailService');
 
@@ -224,6 +225,19 @@ const initSuperTokens = () => {
                     } catch (otpError) {
                       console.error('Error sending OTP during SuperTokens signup:', otpError);
                     }
+
+                    // Assign default 'user' role
+                    try {
+                      const RBACService = require('../services/rbacService');
+                      const roleResult = await RBACService.assignRoleToUser(response.user.id, 'user');
+                      if (roleResult.success) {
+                        console.log('✅ Default user role assigned during signup');
+                      } else {
+                        console.error('Failed to assign default role during signup:', roleResult.error);
+                      }
+                    } catch (roleError) {
+                      console.error('Error assigning default role during signup:', roleError);
+                    }
                     
                     console.log('✅ User created in database via SuperTokens signup');
                   } catch (error) {
@@ -244,6 +258,66 @@ const initSuperTokens = () => {
         cookieSameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       }),
       UserMetadata.init(),
+      UserRoles.init({
+        skipAddingRolesToAccessTokenPayload: false,
+        skipAddingPermissionsToAccessTokenPayload: false,
+        override: {
+          apis: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              // Custom role assignment logic
+              addRoleToUserPOST: async function (input) {
+                console.log('🔐 Adding role to user:', input);
+                const response = await originalImplementation.addRoleToUserPOST(input);
+                
+                // Sync with our MongoDB user model
+                if (response.status === 'OK') {
+                  try {
+                    const User = require('../models/User');
+                    const user = await User.findBySupertokensUserId(input.userId);
+                    if (user) {
+                      if (!user.roles.includes(input.role)) {
+                        user.roles.push(input.role);
+                        await user.save();
+                      }
+                      console.log('✅ Role synced to MongoDB for user:', input.userId);
+                    }
+                  } catch (error) {
+                    console.error('❌ Error syncing role to MongoDB:', error);
+                  }
+                }
+                
+                return response;
+              },
+              removeUserRolePOST: async function (input) {
+                console.log('🔐 Removing role from user:', input);
+                const response = await originalImplementation.removeUserRolePOST(input);
+                
+                // Sync with our MongoDB user model
+                if (response.status === 'OK') {
+                  try {
+                    const User = require('../models/User');
+                    const user = await User.findBySupertokensUserId(input.userId);
+                    if (user) {
+                      user.roles = user.roles.filter(r => r !== input.role);
+                      // Ensure user always has at least 'user' role
+                      if (user.roles.length === 0) {
+                        user.roles.push('user');
+                      }
+                      await user.save();
+                      console.log('✅ Role removed and synced to MongoDB for user:', input.userId);
+                    }
+                  } catch (error) {
+                    console.error('❌ Error syncing role removal to MongoDB:', error);
+                  }
+                }
+                
+                return response;
+              }
+            };
+          }
+        }
+      }),
       Dashboard.init({
         // No API key required for local development
         // apiKey: config.supertokens.apiKey,

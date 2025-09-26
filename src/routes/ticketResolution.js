@@ -145,6 +145,7 @@ const auth = require('../middleware/auth');
  */
 router.post('/resolve', 
     auth.authenticateToken,
+    auth.requirePermission('tickets:write'),
     validateTicketResolution,
     validateTicketStructure,
     resolveTicket

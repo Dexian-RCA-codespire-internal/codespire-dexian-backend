@@ -31,11 +31,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  role: {
+  roles: [{
     type: String,
-    enum: ['user', 'admin', 'moderator'],
-    default: 'user'
-  },
+    enum: ['user', 'admin'],
+    default: ['user']
+  }],
+  permissions: [{
+    type: String
+  }],
   isEmailVerified: {
     type: Boolean,
     default: false
@@ -100,6 +103,8 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ email: 1 });
 userSchema.index({ supertokensUserId: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ roles: 1 });
+userSchema.index({ permissions: 1 });
 
 // Instance methods
 userSchema.methods.toJSON = function() {
@@ -150,6 +155,52 @@ userSchema.methods.markEmailVerified = function() {
   this.magicLinkExpiry = undefined;
 };
 
+// RBAC methods
+userSchema.methods.syncRolesFromSuperTokens = async function() {
+  try {
+    const { UserRoles } = require('supertokens-node/recipe/userroles');
+    const roles = await UserRoles.getRolesForUser(this.supertokensUserId);
+    
+    this.roles = roles.roles || [];
+    
+    await this.save();
+    return { success: true, roles: this.roles };
+  } catch (error) {
+    console.error('Error syncing roles from SuperTokens:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+userSchema.methods.syncPermissionsFromSuperTokens = async function() {
+  try {
+    const { UserRoles } = require('supertokens-node/recipe/userroles');
+    const permissions = await UserRoles.getPermissionsForUser(this.supertokensUserId);
+    
+    this.permissions = permissions.permissions || [];
+    await this.save();
+    return { success: true, permissions: this.permissions };
+  } catch (error) {
+    console.error('Error syncing permissions from SuperTokens:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+userSchema.methods.hasRole = function(role) {
+  return this.roles.includes(role);
+};
+
+userSchema.methods.hasPermission = function(permission) {
+  return this.permissions.includes(permission);
+};
+
+userSchema.methods.hasAnyRole = function(roles) {
+  return roles.some(role => this.hasRole(role));
+};
+
+userSchema.methods.hasAnyPermission = function(permissions) {
+  return permissions.some(permission => this.hasPermission(permission));
+};
+
 // Static methods
 userSchema.statics.findByEmail = function(email) {
   return this.findOne({ email: email.toLowerCase() });
@@ -170,6 +221,26 @@ userSchema.statics.createUser = async function(supertokensUserId, email, name, f
   });
   
   return await user.save();
+};
+
+userSchema.statics.findByRole = function(role) {
+  return this.find({ roles: role });
+};
+
+userSchema.statics.findByRoles = function(roles) {
+  return this.find({ roles: { $in: roles } });
+};
+
+userSchema.statics.findByPermission = function(permission) {
+  return this.find({ permissions: permission });
+};
+
+userSchema.statics.findByPermissions = function(permissions) {
+  return this.find({ permissions: { $in: permissions } });
+};
+
+userSchema.statics.findUsersWithRole = function(role) {
+  return this.find({ roles: role });
 };
 
 // Pre-save middleware

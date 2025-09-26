@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const playbookController = require('../controllers/playbookController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes (commented out for testing)
 // router.use(authenticateToken);
@@ -152,27 +152,51 @@ const { authenticateToken } = require('../middleware/auth');
  */
 
 // GET /api/v1/playbooks - Get all playbooks
-router.get('/', playbookController.getAllPlaybooks);
+router.get('/', 
+  authenticateToken,
+  requirePermission('playbooks:read'),
+  playbookController.getAllPlaybooks);
 
 // GET /api/v1/playbooks/stats - Get playbook statistics
-router.get('/stats', playbookController.getPlaybookStats);
+router.get('/stats', 
+  authenticateToken,
+  requirePermission('playbooks:read'),
+  playbookController.getPlaybookStats);
 
 // GET /api/v1/playbooks/search - Search playbooks
-router.get('/search', playbookController.searchPlaybooks);
+router.get('/search', 
+  authenticateToken,
+  requirePermission('playbooks:read'),
+  playbookController.searchPlaybooks);
 
 // GET /api/v1/playbooks/:id - Get playbook by ID
-router.get('/:id', playbookController.getPlaybookById);
+router.get('/:id', 
+  authenticateToken,
+  requirePermission('playbooks:read'),
+  playbookController.getPlaybookById);
 
 // POST /api/v1/playbooks - Create new playbook
-router.post('/', playbookController.createPlaybook);
+router.post('/', 
+  authenticateToken,
+  requirePermission('playbooks:write'),
+  playbookController.createPlaybook);
 
 // PUT /api/v1/playbooks/:id - Update playbook
-router.put('/:id', playbookController.updatePlaybook);
+router.put('/:id', 
+  authenticateToken,
+  requirePermission('playbooks:write'),
+  playbookController.updatePlaybook);
 
 // DELETE /api/v1/playbooks/:id - Delete playbook
-router.delete('/:id', playbookController.deletePlaybook);
+router.delete('/:id', 
+  authenticateToken,
+  requirePermission('playbooks:delete'),
+  playbookController.deletePlaybook);
 
 // POST /api/v1/playbooks/:playbookId/increment-usage - Increment usage count
-router.post('/:playbookId/increment-usage', playbookController.incrementUsage);
+router.post('/:playbookId/increment-usage', 
+  authenticateToken,
+  requirePermission('playbooks:write'),
+  playbookController.incrementUsage);
 
 module.exports = router;
