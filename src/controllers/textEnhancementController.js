@@ -57,8 +57,9 @@ class TextEnhancementController {
       if (result.success) {
         res.json({
           success: true,
-          message: 'Text enhanced successfully',
-          data: result.data
+          message: result.message || 'Text enhanced successfully',
+          data: result.data,
+          quotaExceeded: result.quotaExceeded || false
         });
       } else {
         res.status(500).json({

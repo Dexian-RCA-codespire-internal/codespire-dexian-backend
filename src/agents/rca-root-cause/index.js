@@ -65,7 +65,7 @@ ${similarTicketsText}
 ANALYSIS INSTRUCTIONS:
 1. Analyze the symptoms and patterns described in the current ticket
 2. Consider the historical context from similar tickets
-3. Identify 1-3 most likely root causes based on technical analysis
+3. Identify 1-2 most likely root causes based on technical analysis
 4. For each root cause, provide detailed analysis (30-100 words)
 5. CRITICAL: When your root cause analysis is based on patterns from the similar tickets provided (${ticketIds}), you MUST use the exact ticket ID as the evidence source. This directly shows which historical incident supports your analysis and increases confidence.
 6. Assign confidence percentages - higher confidence when evidence comes from provided similar tickets

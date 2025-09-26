@@ -30,9 +30,10 @@ class TextEnhancementService {
 
       if (result.success) {
         console.log('✅ Text enhancement completed successfully');
-        console.log('📊 Enhancement ratio:', result.data.enhancementRatio?.toFixed(2) || 'N/A');
-        console.log('🎯 Confidence:', result.data.confidence + '%');
-        console.log('📈 Improvements:', result.data.improvements?.length || 0);
+        console.log('📊 Total options generated:', result.data.totalOptions || 0);
+        console.log('📈 Enhanced options:', result.data.enhancedOptions?.map((opt, idx) => 
+          `Option ${opt.option}: ${opt.confidence}% confidence`
+        ).join(', ') || 'N/A');
       } else {
         console.error('❌ Text enhancement failed:', result.error);
       }

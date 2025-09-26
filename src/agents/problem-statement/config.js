@@ -24,7 +24,7 @@ const config = {
     // LLM settings
     llm: {
         provider: 'gemini', // Default LLM provider
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash-exp',
         fallbackProvider: 'openai',
         fallbackModel: 'gpt-3.5-turbo'
     },

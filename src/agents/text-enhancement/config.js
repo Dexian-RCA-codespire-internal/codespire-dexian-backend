@@ -6,7 +6,7 @@ const config = {
   // LLM Configuration
   llm: {
     provider: process.env.LLM_PROVIDER || 'gemini',
-    model: process.env.LLM_MODEL || 'gemini-1.5-flash',
+    model: process.env.LLM_MODEL || 'gemini-2.0-flash-exp',
     temperature: 0.3,
     maxTokens: 1000,
     timeout: 30000
