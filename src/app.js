@@ -115,6 +115,9 @@ app.get('/debug/polling', async (req, res) => {
 const { setupSwagger } = require('./swagger');
 setupSwagger(app, PORT);
 
+// Serve static email assets
+app.use('/email-assets', express.static('public/email-assets'));
+
 // API routes
 app.use('/api/v1', require('./routes'));
 
