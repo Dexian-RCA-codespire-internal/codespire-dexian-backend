@@ -1,6 +1,6 @@
 const { verifySession } = require('supertokens-node/recipe/session/framework/express');
 const { getUserById } = require('supertokens-node/recipe/emailpassword');
-const { UserRoles } = require('supertokens-node/recipe/userroles');
+const UserRoles = require('supertokens-node/recipe/userroles');
 const config = require('../config');
 
 // Original simple authentication (for backward compatibility)

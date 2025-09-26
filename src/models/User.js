@@ -158,7 +158,7 @@ userSchema.methods.markEmailVerified = function() {
 // RBAC methods
 userSchema.methods.syncRolesFromSuperTokens = async function() {
   try {
-    const { UserRoles } = require('supertokens-node/recipe/userroles');
+    const UserRoles = require('supertokens-node/recipe/userroles');
     const roles = await UserRoles.getRolesForUser(this.supertokensUserId);
     
     this.roles = roles.roles || [];
@@ -173,7 +173,7 @@ userSchema.methods.syncRolesFromSuperTokens = async function() {
 
 userSchema.methods.syncPermissionsFromSuperTokens = async function() {
   try {
-    const { UserRoles } = require('supertokens-node/recipe/userroles');
+    const UserRoles = require('supertokens-node/recipe/userroles');
     const permissions = await UserRoles.getPermissionsForUser(this.supertokensUserId);
     
     this.permissions = permissions.permissions || [];

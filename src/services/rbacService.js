@@ -1,5 +1,5 @@
 // new file servicenow
-const { UserRoles } = require('supertokens-node/recipe/userroles');
+const UserRoles = require('supertokens-node/recipe/userroles');
 const User = require('../models/User');
 const { ALL_PERMISSIONS, ROLE_PERMISSIONS } = require('../constants/permissions');
 
@@ -348,14 +348,32 @@ class RBACService {
 
   /**
    * Initialize default roles and permissions
+   * @param {boolean} force - Force reinitialization even if roles exist
    * @returns {Object} Initialization result
    */
-  static async initializeDefaultRolesAndPermissions() {
+  static async initializeDefaultRolesAndPermissions(force = false) {
     try {
       console.log('🔐 Initializing default roles and permissions...');
       
+      // Check if roles already exist (unless force is true)
+      if (!force) {
+        const existingRoles = await this.getAllRoles();
+        if (existingRoles.success && existingRoles.roles.length > 0) {
+          console.log('ℹ️ Roles already exist in SuperTokens:');
+          existingRoles.roles.forEach(role => console.log(`   - ${role}`));
+          console.log('ℹ️ Skipping role creation. Use force=true to reinitialize.');
+          return {
+            success: true,
+            message: 'Roles already exist, skipping initialization',
+            skipped: true
+          };
+        }
+      }
+      
       // Use role-permission mappings from constants file
       const defaultRoles = ROLE_PERMISSIONS;
+      const createdRoles = [];
+      const updatedRoles = [];
 
       // Create roles and permissions
       for (const [role, permissions] of Object.entries(defaultRoles)) {
@@ -370,13 +388,23 @@ class RBACService {
         }
         
         // Create role with permissions
-        await this.createRole(role, permissions);
-        console.log(`✅ Created role: ${role} with ${permissions.length} permissions`);
+        const result = await this.createRole(role, permissions);
+        if (result.success) {
+          if (result.message.includes('created')) {
+            createdRoles.push(role);
+          } else {
+            updatedRoles.push(role);
+          }
+          console.log(`✅ ${result.message}: ${role} with ${permissions.length} permissions`);
+        }
       }
       
       return {
         success: true,
-        message: 'Default roles and permissions initialized successfully'
+        message: 'Default roles and permissions initialized successfully',
+        createdRoles,
+        updatedRoles,
+        totalRoles: createdRoles.length + updatedRoles.length
       };
     } catch (error) {
       console.error('❌ Error initializing default roles and permissions:', error);

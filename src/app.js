@@ -17,6 +17,29 @@ initializeDatabase().catch(error => {
   console.error('Failed to initialize databases:', error);
 });
 
+// Initialize RBAC system with default roles and permissions
+const RBACService = require('./services/rbacService');
+const initializeRBAC = async () => {
+  try {
+    console.log('🔐 Initializing RBAC system...');
+    const result = await RBACService.initializeDefaultRolesAndPermissions();
+    if (result.success) {
+      console.log('✅ RBAC system initialized successfully');
+    } else {
+      console.error('❌ Failed to initialize RBAC system:', result.error);
+    }
+  } catch (error) {
+    console.error('❌ Error initializing RBAC system:', error);
+  }
+};
+
+// Initialize RBAC after database connection
+initializeDatabase().then(() => {
+  initializeRBAC();
+}).catch(error => {
+  console.error('Failed to initialize databases:', error);
+});
+
 // Initialize ServiceNow Polling Service
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
