@@ -495,8 +495,7 @@ class SLAMonitoringService {
    * @param {Object} sla - SLA record
    * @param {Object} statusInfo - Current SLA status information
    */
-  // COMMENTED OUT: Entire function disabled
-  /*
+ 
   async sendSLAEmailNotification(sla, statusInfo) {
     try {
       const { status, timeLeft, percentage } = statusInfo;
@@ -571,7 +570,7 @@ class SLAMonitoringService {
       throw error;
     }
   }
-  */
+
 
   /**
    * Update SLA record with new notification status
