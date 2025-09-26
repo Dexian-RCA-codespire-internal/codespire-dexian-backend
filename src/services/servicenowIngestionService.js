@@ -3,9 +3,11 @@ const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
 const { webSocketService } = require('./websocketService');
+const { notificationService } = require('./notificationService');
+const { createOrUpdateSLA } = require('./slaService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
-
+const moment = require('moment-timezone');
 // Bulk Import State Schema
 const bulkImportStateSchema = new mongoose.Schema({
   service: { type: String, default: 'servicenow', unique: true },
@@ -46,7 +48,6 @@ const markBulkImportCompleted = async (totalTicketsImported) => {
       },
       { upsert: true, new: true }
     );
-    console.log('✅ Bulk import state marked as completed');
   } catch (error) {
     console.error('❌ Error marking bulk import as completed:', error.message);
   }
@@ -67,7 +68,6 @@ const resetBulkImportState = async () => {
       },
       { upsert: true, new: true }
     );
-    console.log('🔄 Bulk import state reset');
   } catch (error) {
     console.error('❌ Error resetting bulk import state:', error.message);
   }
@@ -113,6 +113,35 @@ const createApiClient = () => {
 const apiClient = createApiClient();
 
 
+
+function convertToUTCAndStore(inputDateTimeStr, inputTimeZone = 'GMT') {
+  try {
+    // Handle empty or null date strings
+    if (!inputDateTimeStr || inputDateTimeStr.trim() === '') {
+      return null;
+    }
+
+    // Step 1: Parse the input as a moment in the given time zone (default: GMT)
+    const localMoment = moment.tz(inputDateTimeStr, 'YYYY-MM-DD HH:mm:ss', inputTimeZone);
+
+    // Check if the parsed moment is valid
+    if (!localMoment.isValid()) {
+      console.warn(`Invalid date string: ${inputDateTimeStr}`);
+      return null;
+    }
+
+    // Step 2: Convert to UTC
+    const utcMoment = localMoment.clone().utc();
+
+    // Return the moment object (MongoDB will handle the conversion)
+    return utcMoment.toDate();
+  } catch (error) {
+    console.error('Error converting date:', error);
+    return null;
+  } 
+}
+
+
 /**
  * Fetch tickets from ServiceNow and save to database (for polling)
  */
@@ -124,7 +153,7 @@ const fetchTicketsAndSave = async (options = {}) => {
       limit = 10,
       offset = 0,
       query = '',
-      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags,sys_created_on,sys_updated_on',
       useMaxRecords = false
     } = options;
 
@@ -132,8 +161,6 @@ const fetchTicketsAndSave = async (options = {}) => {
     const effectiveLimit = useMaxRecords ? 
       Math.min(limit, config.output.maxRecords) : 
       limit;
-    
-    console.log(`🔧 Requested limit: ${limit}, Effective limit: ${effectiveLimit}`);
 
     let allTickets = [];
     let currentOffset = offset;
@@ -144,14 +171,14 @@ const fetchTicketsAndSave = async (options = {}) => {
       const remainingRecords = effectiveLimit - totalFetched;
       const currentLimit = Math.min(limit, remainingRecords);
       
-      console.log(`📄 Fetching records ${currentOffset + 1} to ${currentOffset + currentLimit}...`);
-      
       const params = {
         sysparm_limit: currentLimit,
         sysparm_offset: currentOffset,
         sysparm_query: query,
         sysparm_fields: fields,
-        sysparm_display_value: 'true'
+        sysparm_display_value: true
+
+        
       };
 
       const response = await apiClient.get(config.servicenow.apiEndpoint, { params });
@@ -160,8 +187,6 @@ const fetchTicketsAndSave = async (options = {}) => {
         const tickets = response.data.result;
         allTickets = allTickets.concat(tickets);
         totalFetched += tickets.length;
-        
-        console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
         
         // Check if we have more records
         hasMore = tickets.length === currentLimit && totalFetched < effectiveLimit;
@@ -172,7 +197,6 @@ const fetchTicketsAndSave = async (options = {}) => {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       } else {
-        console.log('⚠️ No more tickets found or API returned unexpected response');
         hasMore = false;
       }
     }
@@ -181,7 +205,6 @@ const fetchTicketsAndSave = async (options = {}) => {
     
     // Check if no data was returned
     if (allTickets.length === 0) {
-      console.log('⚠️ No tickets found in ServiceNow for polling');
       return {
         success: true,
         message: 'No tickets found',
@@ -196,7 +219,6 @@ const fetchTicketsAndSave = async (options = {}) => {
     }
 
     // Save tickets to database
-    console.log('💾 Saving tickets to database...');
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
@@ -215,9 +237,9 @@ const fetchTicketsAndSave = async (options = {}) => {
           priority: ticketData.priority,
           impact: ticketData.impact,
           urgency: ticketData.urgency,
-          opened_time: ticketData.opened_at ? new Date(ticketData.opened_at) : null,
-          closed_time: ticketData.closed_at ? new Date(ticketData.closed_at) : null,
-          resolved_time: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
+          opened_time: convertToUTCAndStore(ticketData.opened_at, 'GMT'),
+          closed_time: convertToUTCAndStore(ticketData.closed_at, 'GMT'),
+          resolved_time: convertToUTCAndStore(ticketData.resolved_at, 'GMT'),
           requester: { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id },
           assigned_to: { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to },
           assignment_group: { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group },
@@ -249,9 +271,31 @@ const fetchTicketsAndSave = async (options = {}) => {
             savedTicket = await newTicket.save();
             savedCount++;
             isNewTicket = true;
+            
+            // Create SLA record for new ticket
+            try {
+              const slaResult = await createOrUpdateSLA(savedTicket);
+              if (!slaResult.success) {
+                console.log(`⚠️ Failed to create SLA for ticket ${ticketData.number}: ${slaResult.error}`);
+              }
+            } catch (slaError) {
+              console.error(`❌ Error creating SLA for ticket ${ticketData.number}:`, slaError.message);
+              // Don't fail the entire process if SLA creation fails
+            }
+            
             // Emit WebSocket event for new ticket
-          webSocketService.emitNewTicket(newTicket.toObject());
-            console.log(`✅ Created new ticket: ${ticketData.number}`);
+            webSocketService.emitNewTicket(newTicket.toObject());
+            // Persist notification for new ticket
+            await notificationService.createAndBroadcast({
+              title: "New ticket",
+              message: `Ticket ${ticketData.number} created`,
+              type: "success",
+              related: {
+                ticketMongoId: savedTicket._id,
+                ticket_id: ticketData.number,
+                eventType: "new_ticket"
+              }
+            });
           } catch (saveError) {
             console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
             throw saveError;
@@ -259,15 +303,57 @@ const fetchTicketsAndSave = async (options = {}) => {
         } else {
           // Update existing ticket with timeout handling
           try {
+            // Check if there are actual changes to avoid unnecessary notifications
+            const hasChanges = 
+              existingTicket.status !== ticketDoc.status ||
+              existingTicket.description !== ticketDoc.description ||
+              existingTicket.priority !== ticketDoc.priority ||
+              existingTicket.assigned_to?.id !== ticketDoc.assigned_to?.id ||
+              existingTicket.assignment_group?.id !== ticketDoc.assignment_group?.id ||
+              JSON.stringify(existingTicket.updatedAt) !== JSON.stringify(new Date(ticketData.sys_updated_on || new Date()));
+
+            if (!hasChanges) {
+              // No real changes detected, skip update and notification
+              continue;
+            }
+
+            const previousStatus = existingTicket.status;
             savedTicket = await Ticket.findOneAndUpdate(
               { ticket_id: ticketData.number, source: 'ServiceNow' },
               ticketDoc,
               { new: true, maxTimeMS: 10000 }
             );
             updatedCount++;
+            
+            // Update SLA record for existing ticket
+            try {
+              const slaResult = await createOrUpdateSLA(savedTicket);
+              if (!slaResult.success) {
+                console.log(`⚠️ Failed to update SLA for ticket ${ticketData.number}: ${slaResult.error}`);
+              }
+            } catch (slaError) {
+              console.error(`❌ Error updating SLA for ticket ${ticketData.number}:`, slaError.message);
+              // Don't fail the entire process if SLA update fails
+            }
+            
             // Emit WebSocket event for updated ticket
-          webSocketService.emitUpdatedTicket(savedTicket.toObject());
-            console.log(`✅ Updated existing ticket: ${ticketData.number}`);
+            webSocketService.emitUpdatedTicket(savedTicket.toObject());
+            
+            // Persist notification for updated ticket ONLY if there are real changes
+            if (previousStatus !== ticketDoc.status) {
+              // Status changed
+              await notificationService.createAndBroadcast({
+                title: "Ticket status changed",
+                message: `Ticket ${ticketData.number} status: ${previousStatus} → ${ticketDoc.status}`,
+                type: "info",
+                related: {
+                  ticketMongoId: savedTicket._id,
+                  ticket_id: ticketData.number,
+                  eventType: "status_changed"
+                }
+              });
+            } 
+
           } catch (updateError) {
             console.error(`❌ Error updating ticket ${ticketData.number}:`, updateError.message);
             throw updateError;
@@ -356,7 +442,7 @@ const bulkImportAllTickets = async (options = {}) => {
     
     const {
       query = '',
-      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags',
+      fields = 'sys_id,number,short_description,description,category,subcategory,state,priority,impact,urgency,opened_at,closed_at,resolved_at,caller_id,assigned_to,assignment_group,company,location,tags, sys_created_on,sys_updated_on',
       batchSize = 1000 // Large batch size for bulk import
     } = options;
 
@@ -365,19 +451,14 @@ const bulkImportAllTickets = async (options = {}) => {
     let hasMore = true;
     let totalFetched = 0;
 
-    console.log(`🔧 Bulk import settings:`);
-    console.log(`   - Batch size: ${batchSize}`);
-    console.log(`   - Query filter: ${query || 'None (all tickets)'}`);
-
     while (hasMore) {
-      console.log(`📄 Fetching batch ${Math.floor(offset / batchSize) + 1} (records ${offset + 1} to ${offset + batchSize})...`);
       
       const params = {
         sysparm_limit: batchSize,
         sysparm_offset: offset,
         sysparm_query: query,
         sysparm_fields: fields,
-        sysparm_display_value: 'true'
+        sysparm_display_value: true
       };
 
       const response = await apiClient.get(config.servicenow.apiEndpoint, { params });
@@ -386,8 +467,6 @@ const bulkImportAllTickets = async (options = {}) => {
         const tickets = response.data.result;
         allTickets = allTickets.concat(tickets);
         totalFetched += tickets.length;
-        
-        console.log(`✅ Fetched ${tickets.length} tickets (Total: ${allTickets.length})`);
         
         // Check if we have more records
         hasMore = tickets.length === batchSize;
@@ -398,7 +477,6 @@ const bulkImportAllTickets = async (options = {}) => {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
       } else {
-        console.log('⚠️ No more tickets found or API returned unexpected response');
         hasMore = false;
       }
     }
@@ -406,7 +484,6 @@ const bulkImportAllTickets = async (options = {}) => {
     console.log(`📊 Bulk import completed: ${allTickets.length} tickets fetched from ServiceNow`);
 
     // Save all tickets to database
-    console.log('💾 Saving all tickets to database...');
     let savedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
@@ -428,9 +505,9 @@ const bulkImportAllTickets = async (options = {}) => {
           priority: ticketData.priority,
           impact: ticketData.impact,
           urgency: ticketData.urgency,
-          opened_time: ticketData.opened_at ? new Date(ticketData.opened_at) : null,
-          closed_time: ticketData.closed_at ? new Date(ticketData.closed_at) : null,
-          resolved_time: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
+          opened_time: convertToUTCAndStore(ticketData.opened_at, 'GMT'),
+          closed_time: convertToUTCAndStore(ticketData.closed_at, 'GMT'),
+          resolved_time: convertToUTCAndStore(ticketData.resolved_at, 'GMT'),
           requester: { id: typeof ticketData.caller_id === 'object' ? ticketData.caller_id.value || ticketData.caller_id.sys_id : ticketData.caller_id },
           assigned_to: { id: typeof ticketData.assigned_to === 'object' ? ticketData.assigned_to.value || ticketData.assigned_to.sys_id : ticketData.assigned_to },
           assignment_group: { id: typeof ticketData.assignment_group === 'object' ? ticketData.assignment_group.value || ticketData.assignment_group.sys_id : ticketData.assignment_group },
@@ -458,23 +535,58 @@ const bulkImportAllTickets = async (options = {}) => {
         if (!existingTicket) {
           // Create new ticket
           try {
-          const newTicket = new Ticket(ticketDoc);
-          savedTicket = await newTicket.save();
-          savedCount++;
-          isNewTicket = true;// Emit WebSocket event for new ticket
-          webSocketService.emitNewTicket(newTicket.toObject());
+            const newTicket = new Ticket(ticketDoc);
+            savedTicket = await newTicket.save();
+            savedCount++;
+            isNewTicket = true;
+            
+            // Create SLA record for new ticket
+            try {
+              const slaResult = await createOrUpdateSLA(savedTicket);
+              if (!slaResult.success) {
+                console.log(`⚠️ Failed to create SLA for ticket ${ticketData.number}: ${slaResult.error}`);
+              }
+            } catch (slaError) {
+              console.error(`❌ Error creating SLA for ticket ${ticketData.number}:`, slaError.message);
+              // Don't fail the entire process if SLA creation fails
+            }
+            
+            // Emit WebSocket event for new ticket
+            webSocketService.emitNewTicket(newTicket.toObject());
+            // Persist notification for new ticket
+            await notificationService.createAndBroadcast({
+              title: "New ticket",
+              message: `Ticket ${ticketData.number} created`,
+              type: "success",
+              related: {
+                ticketMongoId: savedTicket._id,
+                ticket_id: ticketData.number,
+                eventType: "new_ticket"
+              }
+            });
         } catch (saveError) {
           console.error(`❌ Error creating ticket ${ticketData.number}:`, saveError.message);
           throw saveError;
         }
         } else {
           // Update existing ticket
-          await Ticket.findOneAndUpdate(
+          savedTicket = await Ticket.findOneAndUpdate(
             { ticket_id: ticketData.number, source: 'ServiceNow' },
             ticketDoc,
             { new: true }
           );
           updatedCount++;
+          
+          // Update SLA record for existing ticket
+          try {
+            const slaResult = await createOrUpdateSLA(savedTicket);
+            if (!slaResult.success) {
+              console.log(`⚠️ Failed to update SLA for ticket ${ticketData.number}: ${slaResult.error}`);
+            }
+          } catch (slaError) {
+            console.error(`❌ Error updating SLA for ticket ${ticketData.number}:`, slaError.message);
+            // Don't fail the entire process if SLA update fails
+          }
         }
 
       } catch (error) {
@@ -485,14 +597,12 @@ const bulkImportAllTickets = async (options = {}) => {
 
     // Batch vectorize all tickets
     if (ticketsForVectorization.length > 0) {
-      console.log('🔄 Vectorizing tickets for similarity search...');
       try {
         const vectorResults = await ticketVectorizationService.vectorizeAndStoreTicketsBatch(
           ticketsForVectorization, 
           mongoIdsForVectorization
         );
         vectorizedCount = vectorResults.successful;
-        console.log(`✅ Vectorization completed: ${vectorResults.successful} successful, ${vectorResults.failed} failed`);
       } catch (vectorError) {
         console.error('❌ Error in batch vectorization:', vectorError.message);
       }

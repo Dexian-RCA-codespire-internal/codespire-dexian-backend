@@ -10,6 +10,10 @@ const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
 const ticketResolutionRoutes = require('./ticketResolution');
+const notificationsRoutes = require('./notifications');
+const slaRoutes = require('./sla');
+const slaMonitoringRoutes = require('./slaMonitoring');
+
 const rcaGenerationRoutes = require('./rcaGeneration');
 const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
@@ -32,6 +36,9 @@ router.use('/rca', rcaGenerationRoutes);
 router.use('/auto-suggestion', autoSuggestionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
+router.use('/notifications', notificationsRoutes);
+router.use('/sla', slaRoutes);
+router.use('/sla/monitoring', slaMonitoringRoutes);
 router.use('/problem-statement', problemStatementRoutes);
 router.use('/timeline-context', timelineContextRoutes);
 router.use('/impact-assessment', impactAssessmentRoutes);
@@ -57,6 +64,7 @@ router.get('/', (req, res) => {
       rcaGeneration: '/rca',
       autoSuggestion: '/auto-suggestion',
       chat: '/chat',
+      notifications: '/notifications',
       playbooks: '/playbooks',
       problemStatement: '/problem-statement',
       timelineContext: '/timeline-context',
