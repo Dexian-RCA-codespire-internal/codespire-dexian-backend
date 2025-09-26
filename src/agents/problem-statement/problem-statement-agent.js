@@ -222,7 +222,7 @@ Requirements:
 4. Determine the severity level from: ${context.availableSeverityLevels.join(', ')}
 5. Determine the business impact category from: ${context.availableBusinessImpactCategories.join(', ')}
 
-Respond in the following JSON format:
+Respond ONLY with valid JSON in the following exact format (no additional text, explanations, or markdown):
 {
   "problemDefinitions": [
     "First problem definition (30-50 words) - focus on technical aspects",
@@ -235,6 +235,12 @@ Respond in the following JSON format:
   "businessImpact": "One of the available business impact categories",
   "confidence": 0.85
 }
+
+IMPORTANT: 
+- Return ONLY the JSON object, no markdown formatting
+- Ensure all strings are properly quoted
+- No trailing commas
+- Valid JSON syntax only
 
 Focus on:
 - Technical accuracy based on the information provided
@@ -250,13 +256,25 @@ Focus on:
      */
     parseLLMResponse(response) {
         try {
-            // Extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in LLM response');
+            
+            // Clean the response first
+            let cleanedResponse = response.trim();
+            
+            // Try to find JSON object boundaries more robustly
+            const jsonStart = cleanedResponse.indexOf('{');
+            const jsonEnd = cleanedResponse.lastIndexOf('}');
+            
+            if (jsonStart === -1 || jsonEnd === -1 || jsonStart >= jsonEnd) {
+                throw new Error('No valid JSON object found in LLM response');
             }
-
-            const parsed = JSON.parse(jsonMatch[0]);
+            
+            // Extract the JSON part
+            let jsonString = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+            
+            // Try to fix common JSON issues
+            jsonString = this.fixCommonJSONIssues(jsonString);
+            
+            const parsed = JSON.parse(jsonString);
             
             // Validate parsed response
             const validation = this.validateLLMResponse(parsed);
@@ -267,7 +285,110 @@ Focus on:
             return parsed;
         } catch (error) {
             console.error('❌ Error parsing LLM response:', error);
+            console.error('❌ Raw response was:', response);
+            
+            // Try fallback parsing with more aggressive cleaning
+            try {
+                const fallbackParsed = this.fallbackJSONParse(response);
+                if (fallbackParsed) {
+                    console.log('✅ Fallback parsing succeeded');
+                    return fallbackParsed;
+                }
+            } catch (fallbackError) {
+                console.error('❌ Fallback parsing also failed:', fallbackError);
+            }
+            
             throw new Error(`Failed to parse LLM response: ${error.message}`);
+        }
+    }
+
+    /**
+     * Fix common JSON issues in LLM responses
+     */
+    fixCommonJSONIssues(jsonString) {
+        // Remove any trailing commas before closing brackets/braces
+        jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+        
+        // Fix unescaped quotes in strings
+        jsonString = jsonString.replace(/"([^"]*)"([^"]*)"([^"]*)":/g, '"$1\\"$2\\"$3":');
+        
+        // Fix single quotes to double quotes
+        jsonString = jsonString.replace(/'/g, '"');
+        
+        // Fix missing quotes around object keys
+        jsonString = jsonString.replace(/(\w+):/g, '"$1":');
+        
+        // Fix boolean values
+        jsonString = jsonString.replace(/:\s*true\b/g, ': true');
+        jsonString = jsonString.replace(/:\s*false\b/g, ': false');
+        jsonString = jsonString.replace(/:\s*null\b/g, ': null');
+        
+        return jsonString;
+    }
+
+    /**
+     * Fallback JSON parsing with more aggressive cleaning
+     */
+    fallbackJSONParse(response) {
+        try {
+            console.log('🔄 Attempting fallback JSON parsing...');
+            
+            // Try to extract just the essential parts and reconstruct
+            const problemDefsMatch = response.match(/problemDefinitions[^[]*\[([^\]]+)\]/);
+            const questionMatch = response.match(/question[^"]*"([^"]+)"/);
+            const issueTypeMatch = response.match(/issueType[^"]*"([^"]+)"/);
+            const severityMatch = response.match(/severity[^"]*"([^"]+)"/);
+            const businessImpactMatch = response.match(/businessImpact[^"]*"([^"]+)"/);
+            const confidenceMatch = response.match(/confidence[^"]*(\d+\.?\d*)/);
+            
+            console.log('🔍 Extracted matches:', {
+                problemDefs: !!problemDefsMatch,
+                question: !!questionMatch,
+                issueType: !!issueTypeMatch,
+                severity: !!severityMatch,
+                businessImpact: !!businessImpactMatch,
+                confidence: !!confidenceMatch
+            });
+            
+            if (!problemDefsMatch || !questionMatch || !issueTypeMatch || !severityMatch || !businessImpactMatch) {
+                console.log('❌ Missing required fields for fallback parsing');
+                return null;
+            }
+            
+            // Extract problem definitions with better parsing
+            const problemDefsString = problemDefsMatch[1];
+            const problemDefs = problemDefsString.split(',').map(def => 
+                def.trim().replace(/^["']|["']$/g, '').replace(/\\"/g, '"')
+            ).filter(def => def.length > 0);
+            
+            // If we don't have exactly 3, pad with defaults
+            while (problemDefs.length < 3) {
+                problemDefs.push(`Technical issue affecting system performance`);
+            }
+            
+            const reconstructed = {
+                problemDefinitions: problemDefs.slice(0, 3),
+                question: questionMatch[1].trim().replace(/\\"/g, '"'),
+                issueType: issueTypeMatch[1].trim().replace(/\\"/g, '"'),
+                severity: severityMatch[1].trim().replace(/\\"/g, '"'),
+                businessImpact: businessImpactMatch[1].trim().replace(/\\"/g, '"'),
+                confidence: confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.8
+            };
+            
+            console.log('🔧 Reconstructed response:', reconstructed);
+            
+            // Validate the reconstructed response
+            const validation = this.validateLLMResponse(reconstructed);
+            if (!validation.isValid) {
+                console.log('❌ Reconstructed response validation failed:', validation.errors);
+                return null;
+            }
+            
+            console.log('✅ Fallback parsing succeeded');
+            return reconstructed;
+        } catch (error) {
+            console.error('❌ Fallback parsing failed:', error);
+            return null;
         }
     }
 

@@ -78,7 +78,7 @@ app.use((req, res, next) => {
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *               uptime: 3600
  */
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),

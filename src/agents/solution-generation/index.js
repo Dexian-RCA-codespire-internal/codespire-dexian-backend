@@ -115,7 +115,7 @@ Generate comprehensive solutions in JSON format with the following structure:
         {
           "step": 1,
           "title": "Step Title",
-          "description": "Detailed step description",
+          "description": "Detailed step description" {Not More than 25 words},
           "responsible": "Who should execute this step",
           "duration": "Estimated duration",
           "requirements": ["Required resources/tools"],
@@ -159,6 +159,7 @@ Generate comprehensive solutions in JSON format with the following structure:
 8. Ensure solutions are practical and implementable
 9. Order solutions by priority and effectiveness
 10. Include dependencies between solutions
+11. The description of the step should not be more than 25 words
 
 Generate 1 comprehensive solutions covering long-term approaches.`;
 }
