@@ -7,7 +7,7 @@ module.exports = {
     // LLM Configuration
     llm: {
         provider: process.env.TIMELINE_LLM_PROVIDER || 'gemini',
-        model: process.env.TIMELINE_LLM_MODEL || 'gemini-1.5-flash',
+        model: process.env.TIMELINE_LLM_MODEL || 'gemini-2.0-flash-exp',
         temperature: parseFloat(process.env.TIMELINE_LLM_TEMPERATURE) || 0.2,
         maxTokens: parseInt(process.env.TIMELINE_LLM_MAX_TOKENS) || 300,
         timeout: parseInt(process.env.TIMELINE_LLM_TIMEOUT) || 30000

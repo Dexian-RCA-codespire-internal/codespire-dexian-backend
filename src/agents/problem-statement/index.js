@@ -44,3 +44,4 @@ module.exports = {
         validateInput: (inputData) => service.validateInput(inputData)
     })
 };
+
