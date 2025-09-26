@@ -62,9 +62,25 @@ class OpenAIService {
         throw new Error('Service not initialized');
       }
 
+      // Build messages array with conversation history
+      const messages = [];
+      
+      // Add conversation history if provided
+      if (options.history && options.history.length > 0) {
+        options.history.forEach(msg => {
+          messages.push({
+            role: msg.role === 'assistant' ? 'assistant' : 'user',
+            content: msg.content
+          });
+        });
+      }
+      
+      // Add current message
+      messages.push({ role: 'user', content: prompt });
+
       const response = await this.client.chat.completions.create({
         model: options.model || 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages,
         max_tokens: options.maxTokens || 150,
         temperature: options.temperature || 0.7
       });

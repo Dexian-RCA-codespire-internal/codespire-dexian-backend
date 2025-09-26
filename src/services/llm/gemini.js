@@ -85,11 +85,20 @@ class GeminiService {
         throw new Error('Service not initialized');
       }
 
+      // Build context from conversation history if provided
+      let contextPrompt = prompt;
+      if (options.history && options.history.length > 0) {
+        const contextMessages = options.history.map(msg => 
+          `${msg.role}: ${msg.content}`
+        ).join('\n');
+        contextPrompt = `Previous conversation:\n${contextMessages}\n\nCurrent message: ${prompt}`;
+      }
+
       const model = this.client.getGenerativeModel({ 
         model: options.model || 'gemini-2.0-flash-exp' 
       });
 
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent(contextPrompt);
       const response = result.response;
 
       return {

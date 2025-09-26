@@ -7,38 +7,23 @@ class ChatController {
     this.conversationHistory = new Map(); // Store conversation history per user/session
   }
 
-  // Send message endpoint
+  // Send message endpoint - matches exact API specification
   async sendMessage(req, res) {
     try {
-      const { message, sessionId = 'default', service = 'gemini' } = req.body;
-
-      if (!message || typeof message !== 'string') {
-        return res.status(400).json({
-          success: false,
-          error: 'Message is required and must be a string'
-        });
-      }
+      const { message, sessionId, service, context } = req.body;
 
       // Get conversation history for this session
       const history = this.conversationHistory.get(sessionId) || [];
       
+      // Prepare context for AI service
+      const conversationContext = {
+        history: history.slice(-10), // Keep last 10 messages for context
+        additionalContext: context || {},
+        sessionId
+      };
+      
       // Generate response using the specified service
-      let response;
-      if (service === 'gemini') {
-        const geminiService = this.llmManager.getService('gemini');
-        // Use fast response for better performance
-        if (message.length < 100 && history.length < 3) {
-          response = await geminiService.generateFastResponse(message);
-        } else {
-          response = await geminiService.generateAdaptiveResponse(message, history);
-        }
-      } else {
-        response = await this.llmManager.generateResponse(service, message, {
-          context: history.length > 0 ? history.slice(-3).map(msg => 
-            `${msg.role}: ${msg.content}`
-          ).join('\n') : null
-        });
-      }
+      const response = await this.llmManager.generateResponse(service, message, conversationContext);
 
       if (!response.success) {
         return res.status(500).json({
@@ -50,20 +35,19 @@ class ChatController {
       // Update conversation history
       const newHistory = [
         ...history,
-        { role: 'user', content: message, timestamp: new Date() },
-        { role: 'assistant', content: response.response, timestamp: new Date() }
+        { role: 'user', content: message, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: response.response, timestamp: new Date().toISOString() }
       ];
       
-      // Keep only last 10 messages to prevent memory issues
-      this.conversationHistory.set(sessionId, newHistory.slice(-10));
+      // Keep only last 20 messages to prevent memory issues
+      this.conversationHistory.set(sessionId, newHistory.slice(-20));
 
+      // Return response matching exact API specification
       res.json({
-        success: true,
         response: response.response,
-        sessionId,
-        service,
-        usage: response.usage || null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        service: service,
+        usage: response.usage || null
       });
 
     } catch (error) {
@@ -76,17 +60,15 @@ class ChatController {
     }
   }
 
-  // Get conversation history
+  // Get conversation history - matches exact API specification
   async getHistory(req, res) {
     try {
       const { sessionId = 'default' } = req.query;
       const history = this.conversationHistory.get(sessionId) || [];
 
+      // Return response matching exact API specification
       res.json({
-        success: true,
-        history,
-        sessionId,
-        count: history.length
+        messages: history
       });
 
     } catch (error) {
@@ -98,7 +80,7 @@ class ChatController {
     }
   }
 
-  // Clear conversation history
+  // Clear conversation history - matches exact API specification
   async clearHistory(req, res) {
     try {
       const { sessionId = 'default' } = req.body;
@@ -109,10 +91,9 @@ class ChatController {
         this.conversationHistory.delete(sessionId);
       }
 
+      // Return response matching exact API specification
       res.json({
-        success: true,
-        message: `Conversation history cleared for session: ${sessionId}`,
-        sessionId
+        success: true
       });
 
     } catch (error) {
@@ -124,19 +105,17 @@ class ChatController {
     }
   }
 
-  // Test LLM service connection
+  // Test LLM service connection - matches exact API specification
   async testService(req, res) {
     try {
-      const { service = 'gemini' } = req.query;
+      const { service } = req.query;
       
       const result = await this.llmManager.testConnection(service);
       
+      // Return response matching exact API specification
       res.json({
         success: result.success,
-        service,
-        message: result.message,
-        response: result.response || null,
-        error: result.error || null
+        service: service
       });
 
     } catch (error) {
@@ -149,15 +128,14 @@ class ChatController {
     }
   }
 
-  // Get available services
+  // Get available services - matches exact API specification
   async getAvailableServices(req, res) {
     try {
       const services = this.llmManager.getAvailableServices();
       
+      // Return response matching exact API specification
       res.json({
-        success: true,
-        services,
-        count: services.length
+        services: services
       });
 
     } catch (error) {
@@ -169,61 +147,16 @@ class ChatController {
     }
   }
 
-  // Generate response with specific options
-  async generateResponse(req, res) {
-    try {
-      const { 
-        message, 
-        service = 'gemini', 
-        options = {} 
-      } = req.body;
-
-      if (!message || typeof message !== 'string') {
-        return res.status(400).json({
-          success: false,
-          error: 'Message is required and must be a string'
-        });
-      }
-
-      const response = await this.llmManager.generateResponse(service, message, options);
-
-      if (!response.success) {
-        return res.status(500).json({
-          success: false,
-          error: response.error || 'Failed to generate response'
-        });
-      }
-
-      res.json({
-        success: true,
-        response: response.response,
-        service,
-        usage: response.usage || null,
-        timestamp: new Date().toISOString()
-      });
-
-    } catch (error) {
-      console.error('Generate response error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        message: error.message
-      });
-    }
-  }
-
-  // Get welcome message
+  // Get welcome message - matches exact API specification
   async getWelcomeMessage(req, res) {
     try {
       const welcomeMessage = `Hello! I'm your RCA (Root Cause Analysis) AI assistant. 
 I help with IT incident management, troubleshooting, and root cause analysis. 
 How can I assist you with your incident investigation today?`;
 
+      // Return response matching exact API specification
       res.json({
-        success: true,
-        response: welcomeMessage,
-        service: 'system',
-        timestamp: new Date().toISOString()
+        response: welcomeMessage
       });
 
     } catch (error) {
