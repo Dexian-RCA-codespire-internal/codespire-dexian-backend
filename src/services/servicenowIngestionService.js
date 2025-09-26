@@ -291,7 +291,8 @@ const fetchTicketsAndSave = async (options = {}) => {
             
             // Send email notification for new ticket
             try {
-              const user = await User.findOne({ status: 'active' }).sort({ lastLoginAt: -1 });
+              const user = await User.find({ status: 'active' });
+              const emails = user.map(user => user.email);
               if (user) {
                 const ticketEmailData = {
                   ticketId: savedTicket.ticket_id,
@@ -306,8 +307,8 @@ const fetchTicketsAndSave = async (options = {}) => {
                   ticketUrl: `http://localhost:3001/analysis/${savedTicket._id}/${savedTicket.ticket_id}`,
                   slaHours: 24
                 };
-                await emailService.sendNewTicketEmailTemplate([user.email], ticketEmailData);
-                console.log(`✅ New ticket email sent to ${user.email}`);
+                await emailService.sendNewTicketEmailTemplate(emails, ticketEmailData);
+                console.log(`✅ New ticket email sent to ${emails.join(', ')}`);
               }
             } catch (emailError) {
               console.error('❌ Email notification failed:', emailError.message);

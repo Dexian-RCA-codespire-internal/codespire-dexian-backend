@@ -503,9 +503,9 @@ class SLAMonitoringService {
 
       // Get the currently logged-in user (similar to new ticket email logic)
       const User = require('../models/User');
-      const user = await User.findOne({ status: 'active' }).sort({ lastLoginAt: -1 });
-      
-      if (!user) {
+      const users = await User.find({ status: 'active' }).sort({ lastLoginAt: -1 });
+
+      if (!users.length) {
         console.warn('⚠️ No active user found for SLA email notification');
         return;
       }
@@ -552,7 +552,8 @@ class SLAMonitoringService {
       };
 
       // Send email using the SLA breach warning template
-      const emailResult = await emailService.sendSLABreachWarningEmailTemplate([user.email], emailData);
+
+      const emailResult = await emailService.sendSLABreachWarningEmailTemplate(emails, emailData);
       
       if (emailResult.success) {
         console.log(`✅ SLA ${status} email sent to ${user.email} for ticket ${sla.ticket_id}`);
