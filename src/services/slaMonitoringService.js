@@ -472,12 +472,15 @@ class SLAMonitoringService {
       }
 
       // Send email notifications for SLA status changes
+      // COMMENTED OUT: Email notification function disabled
+      /*
       try {
         await this.sendSLAEmailNotification(sla, statusInfo);
       } catch (emailError) {
         console.warn(`⚠️ Could not send SLA email notification for ticket ${sla.ticket_id}:`, emailError.message);
         // Don't throw error - email failure shouldn't stop other notifications
       }
+      */
       
       console.log(`📢 SLA notification sent: ${title} - ${message}`);
       
@@ -492,6 +495,8 @@ class SLAMonitoringService {
    * @param {Object} sla - SLA record
    * @param {Object} statusInfo - Current SLA status information
    */
+  // COMMENTED OUT: Entire function disabled
+  /*
   async sendSLAEmailNotification(sla, statusInfo) {
     try {
       const { status, timeLeft, percentage } = statusInfo;
@@ -503,7 +508,8 @@ class SLAMonitoringService {
 
       // Get the currently logged-in user (similar to new ticket email logic)
       const User = require('../models/User');
-      const user = await User.findOne({ status: 'active' }).sort({ lastLoginAt: -1 });
+      const user = await User.find({ status: 'active' });
+      const emails = user.map(user => user.email);
       
       if (!user) {
         console.warn('⚠️ No active user found for SLA email notification');
@@ -552,7 +558,7 @@ class SLAMonitoringService {
       };
 
       // Send email using the SLA breach warning template
-      const emailResult = await emailService.sendSLABreachWarningEmailTemplate([user.email], emailData);
+      const emailResult = await emailService.sendSLABreachWarningEmailTemplate(emails, emailData);
       
       if (emailResult.success) {
         console.log(`✅ SLA ${status} email sent to ${user.email} for ticket ${sla.ticket_id}`);
@@ -565,8 +571,9 @@ class SLAMonitoringService {
       throw error;
     }
   }
+  */
 
-n  /**
+  /**
    * Update SLA record with new notification status
    * @param {Object} sla - SLA record
    * @param {String} newStatus - New notification status
