@@ -86,7 +86,7 @@ class GeminiService {
       }
 
       const model = this.client.getGenerativeModel({ 
-        model: options.model || 'gemini-1.5-flash' 
+        model: options.model || 'gemini-1.5-pro' 
       });
 
       const result = await model.generateContent(prompt);

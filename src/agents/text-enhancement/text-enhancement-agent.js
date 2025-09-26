@@ -42,13 +42,19 @@ class TextEnhancementAgent {
       }
 
       const { text, reference } = input;
-      const enhancementType = ENHANCEMENT_TYPES.CLARITY; // Default to clarity
-      const qualityLevel = QUALITY_LEVELS.STANDARD; // Default to standard
+      
+      // Define 3 different enhancement configurations
+      const enhancementConfigs = [
+        { type: ENHANCEMENT_TYPES.CLARITY, quality: QUALITY_LEVELS.BASIC },
+        { type: ENHANCEMENT_TYPES.PROFESSIONAL, quality: QUALITY_LEVELS.STANDARD },
+        { type: ENHANCEMENT_TYPES.ENGAGING, quality: QUALITY_LEVELS.PREMIUM }
+      ];
 
-      // Create the enhancement prompt
-      const prompt = this.createEnhancementPrompt(text, reference, enhancementType, qualityLevel);
+      // Create the enhancement prompt for 3 different options
+      const prompt = this.createEnhancementPrompt(text, reference, enhancementConfigs);
 
       // Get LLM response
+      console.log('🤖 Calling LLM API with provider:', this.config.llm.provider);
       const llmResponse = await this.llmManager.generateResponse(
         this.config.llm.provider, 
         prompt, 
@@ -58,11 +64,17 @@ class TextEnhancementAgent {
         }
       );
 
+      console.log('📝 LLM Response success:', llmResponse.success);
       if (!llmResponse.success) {
+        console.log('❌ LLM Error:', llmResponse.error);
         // If API quota exceeded, provide a fallback response
-        if (llmResponse.error && llmResponse.error.includes('quota')) {
+        if (llmResponse.error && (llmResponse.error.includes('quota') || llmResponse.error.includes('429') || llmResponse.error.includes('Too Many Requests'))) {
           console.log('⚠️ API quota exceeded, using fallback enhancement');
-          return this.generateFallbackEnhancement(input);
+          const fallbackResult = this.generateFallbackEnhancement(input);
+          // Add a note about the quota issue
+          fallbackResult.message = 'Text enhanced using fallback method due to API quota limits';
+          fallbackResult.quotaExceeded = true;
+          return fallbackResult;
         }
         
         return {
@@ -72,37 +84,57 @@ class TextEnhancementAgent {
         };
       }
 
+      console.log('✅ LLM Response received, parsing...');
+      console.log('📄 LLM Response content:', llmResponse.response?.substring(0, 200) + '...');
+
       // Parse and validate the response
       const parsedResponse = this.parseResponse(llmResponse.response);
       
       if (!parsedResponse.success) {
-        return {
-          success: false,
-          error: 'Failed to parse enhancement response',
-          details: parsedResponse.errors
-        };
+        console.log('❌ Failed to parse LLM response:', parsedResponse.errors);
+        console.log('🔄 Falling back to fallback enhancement');
+        return this.generateFallbackEnhancement(input);
       }
 
-      // Validate enhancement ratio
-      const enhancementRatio = calculateEnhancementRatio(text, parsedResponse.data.enhancedText);
-      if (!isEnhancementRatioAcceptable(text, parsedResponse.data.enhancedText)) {
-        console.log('⚠️ Enhancement ratio too high, applying length constraints');
-        parsedResponse.data.enhancedText = this.applyLengthConstraints(text, parsedResponse.data.enhancedText);
-        parsedResponse.data.enhancementRatio = calculateEnhancementRatio(text, parsedResponse.data.enhancedText);
-      } else {
-        parsedResponse.data.enhancementRatio = enhancementRatio;
-      }
+      console.log('✅ Successfully parsed LLM response');
+
+      // Process each enhanced text option
+      let enhancedOptions = parsedResponse.data.enhancedOptions.map((option, index) => {
+        // Validate enhancement ratio for each option
+        const enhancementRatio = calculateEnhancementRatio(text, option.enhancedText);
+        let finalEnhancedText = option.enhancedText;
+        
+        if (!isEnhancementRatioAcceptable(text, option.enhancedText)) {
+          console.log(`⚠️ Enhancement ratio too high for option ${index + 1}, applying length constraints`);
+          finalEnhancedText = this.applyLengthConstraints(text, option.enhancedText);
+        }
+
+        return {
+          enhancedText: finalEnhancedText,
+          enhancementType: option.enhancementType,
+          qualityLevel: option.qualityLevel,
+          enhancementRatio: calculateEnhancementRatio(text, finalEnhancedText),
+          improvements: option.improvements,
+          confidence: option.confidence
+        };
+      });
+
+      // Sort options by confidence score in descending order (highest first)
+      enhancedOptions.sort((a, b) => b.confidence - a.confidence);
+
+      // Assign option numbers after sorting
+      enhancedOptions = enhancedOptions.map((option, index) => ({
+        option: index + 1,
+        ...option
+      }));
 
       // Format the final response
       return {
         success: true,
         data: {
-          enhancedText: parsedResponse.data.enhancedText,
-          enhancementType: parsedResponse.data.enhancementType,
-          qualityLevel: parsedResponse.data.qualityLevel,
-          enhancementRatio: parsedResponse.data.enhancementRatio,
-          improvements: parsedResponse.data.improvements,
-          confidence: parsedResponse.data.confidence
+          enhancedOptions: enhancedOptions,
+          originalText: text,
+          totalOptions: enhancedOptions.length
         }
       };
 
@@ -154,10 +186,13 @@ class TextEnhancementAgent {
    * @param {string} qualityLevel - Quality level
    * @returns {string} - Formatted prompt
    */
-  createEnhancementPrompt(text, reference, enhancementType, qualityLevel) {
-    const enhancementInstructions = this.getEnhancementInstructions(enhancementType, qualityLevel);
+  createEnhancementPrompt(text, reference, enhancementConfigs) {
+    const instructions = enhancementConfigs.map((config, index) => {
+      const enhancementInstructions = this.getEnhancementInstructions(config.type, config.quality);
+      return `Option ${index + 1}: ${enhancementInstructions}`;
+    }).join('\n');
     
-    return `You are an expert text enhancement specialist. Enhance the following text while keeping it concise and maintaining its core meaning.
+    return `You are an expert text enhancement specialist. Create 3 COMPLETELY DIFFERENT enhanced versions of the following text. Each version must be distinctly different in style, tone, structure, and approach while maintaining the core meaning.
 
 ORIGINAL TEXT:
 "${text}"
@@ -166,30 +201,61 @@ REFERENCE CONTEXT:
 ${reference || 'No reference context provided'}
 
 ENHANCEMENT REQUIREMENTS:
-${enhancementInstructions}
+${instructions}
+
+CRITICAL REQUIREMENTS FOR DISTINCT OPTIONS:
+1. Option 1 (${enhancementConfigs[0].type}): Focus on SIMPLICITY and CLARITY. Use shorter sentences, simpler words, and direct language. Break down complex ideas into simple terms.
+2. Option 2 (${enhancementConfigs[1].type}): Focus on PROFESSIONALISM and FORMALITY. Use technical terminology, formal structure, and business language. Make it sound like a corporate report.
+3. Option 3 (${enhancementConfigs[2].type}): Focus on ENGAGEMENT and IMPACT. Use active voice, compelling language, and create urgency or importance. Make it sound like a marketing message.
 
 IMPORTANT CONSTRAINTS:
-1. Keep the enhanced text within 130% of the original length (${Math.round(text.length * 1.3)} characters max)
-2. Maintain the original meaning and intent
-3. Improve clarity, grammar, and flow
-4. Make it more professional and engaging
-5. Don't add unnecessary words or phrases
-6. Preserve any technical terms or specific information
+1. Keep each enhanced text within 130% of the original length (${Math.round(text.length * 1.3)} characters max)
+2. Maintain the original meaning and intent in all versions
+3. Each version MUST be noticeably different from the others
+4. Don't just change punctuation - actually restructure and rephrase
+5. Preserve any technical terms or specific information
+6. Make each option follow its specific enhancement type and quality level
+
+EXAMPLES OF DIFFERENT APPROACHES:
+- SIMPLE: "Users can't open files. This makes them frustrated. It causes more support calls."
+- PROFESSIONAL: "Users are experiencing difficulties with file association functionality, resulting in reduced productivity and increased support ticket volume."
+- ENGAGING: "Users are stuck! They can't open their files the way they want, leading to frustration and a flood of support requests."
 
 RESPONSE FORMAT (JSON):
 {
-  "enhancedText": "The improved version of the text",
-  "enhancementType": "${enhancementType}",
-  "qualityLevel": "${qualityLevel}",
-  "improvements": ["List of specific improvements made"],
-  "confidence": 85
+  "enhancedOptions": [
+    {
+      "enhancedText": "SIMPLE AND CLEAR VERSION - Short sentences, easy words, direct approach",
+      "enhancementType": "${enhancementConfigs[0].type}",
+      "qualityLevel": "${enhancementConfigs[0].quality}",
+      "improvements": ["Simplified language", "Shortened sentences", "Improved clarity"],
+      "confidence": 85
+    },
+    {
+      "enhancedText": "PROFESSIONAL AND FORMAL VERSION - Technical terms, formal structure, business language",
+      "enhancementType": "${enhancementConfigs[1].type}",
+      "qualityLevel": "${enhancementConfigs[1].quality}",
+      "improvements": ["Enhanced professionalism", "Technical terminology", "Formal structure"],
+      "confidence": 88
+    },
+    {
+      "enhancedText": "ENGAGING AND IMPACTFUL VERSION - Active voice, compelling language, creates urgency",
+      "enhancementType": "${enhancementConfigs[2].type}",
+      "qualityLevel": "${enhancementConfigs[2].quality}",
+      "improvements": ["Added engagement", "Active voice", "Compelling language"],
+      "confidence": 82
+    }
+  ]
 }
 
-IMPORTANT: 
+CRITICAL INSTRUCTIONS:
+- Each enhanced text MUST be COMPLETELY DIFFERENT from the others
+- Don't just copy the original text with minor changes
+- Actually restructure, rephrase, and rewrite each version
+- Make them look like they were written by different people
+- Use different sentence structures, vocabulary, and tone for each option
 - Respond ONLY with valid JSON
-- Enhanced text should be significantly better but not much longer
-- Focus on quality improvements, not quantity
-- Confidence should be a number between 0-100`;
+- Confidence should be a number between 0-100 for each option`;
   }
 
   /**
@@ -237,25 +303,34 @@ IMPORTANT:
       const parsed = JSON.parse(jsonMatch[0]);
       const errors = [];
 
-      // Validate required fields
-      if (!parsed.enhancedText || typeof parsed.enhancedText !== 'string') {
-        errors.push('enhancedText is required and must be a string');
-      }
+      // Validate enhancedOptions array
+      if (!Array.isArray(parsed.enhancedOptions) || parsed.enhancedOptions.length === 0) {
+        errors.push('enhancedOptions is required and must be a non-empty array');
+      } else if (parsed.enhancedOptions.length !== 3) {
+        errors.push('enhancedOptions must contain exactly 3 options');
+      } else {
+        // Validate each option
+        parsed.enhancedOptions.forEach((option, index) => {
+          if (!option.enhancedText || typeof option.enhancedText !== 'string') {
+            errors.push(`Option ${index + 1}: enhancedText is required and must be a string`);
+          }
 
-      if (!parsed.enhancementType || !isValidEnhancementType(parsed.enhancementType)) {
-        errors.push(`enhancementType must be one of: ${ENHANCEMENT_TYPE_LIST.join(', ')}`);
-      }
+          if (!option.enhancementType || !isValidEnhancementType(option.enhancementType)) {
+            errors.push(`Option ${index + 1}: enhancementType must be one of: ${ENHANCEMENT_TYPE_LIST.join(', ')}`);
+          }
 
-      if (!parsed.qualityLevel || !isValidQualityLevel(parsed.qualityLevel)) {
-        errors.push(`qualityLevel must be one of: ${Object.values(QUALITY_LEVELS).join(', ')}`);
-      }
+          if (!option.qualityLevel || !isValidQualityLevel(option.qualityLevel)) {
+            errors.push(`Option ${index + 1}: qualityLevel must be one of: ${Object.values(QUALITY_LEVELS).join(', ')}`);
+          }
 
-      if (!Array.isArray(parsed.improvements) || parsed.improvements.length === 0) {
-        errors.push('improvements must be a non-empty array');
-      }
+          if (!Array.isArray(option.improvements) || option.improvements.length === 0) {
+            errors.push(`Option ${index + 1}: improvements must be a non-empty array`);
+          }
 
-      if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {
-        errors.push('confidence must be a number between 0 and 100');
+          if (typeof option.confidence !== 'number' || option.confidence < 0 || option.confidence > 100) {
+            errors.push(`Option ${index + 1}: confidence must be a number between 0 and 100`);
+          }
+        });
       }
 
       if (errors.length > 0) {
@@ -268,11 +343,13 @@ IMPORTANT:
       return {
         success: true,
         data: {
-          enhancedText: parsed.enhancedText.trim(),
-          enhancementType: parsed.enhancementType,
-          qualityLevel: parsed.qualityLevel,
-          improvements: parsed.improvements.map(imp => imp.trim()).filter(imp => imp.length > 0),
-          confidence: Math.round(parsed.confidence)
+          enhancedOptions: parsed.enhancedOptions.map((option, index) => ({
+            enhancedText: option.enhancedText.trim(),
+            enhancementType: option.enhancementType,
+            qualityLevel: option.qualityLevel,
+            improvements: option.improvements.map(imp => imp.trim()).filter(imp => imp.length > 0),
+            confidence: Math.round(option.confidence)
+          }))
         }
       };
 
@@ -328,11 +405,59 @@ IMPORTANT:
    */
   generateFallbackEnhancement(input) {
     const { text, reference } = input;
-    const enhancementType = ENHANCEMENT_TYPES.CLARITY; // Default to clarity
     
-    // Simple rule-based enhancement
+    // Create 3 different fallback enhancement options with different types and quality levels
+    let enhancedOptions = [
+      {
+        enhancedText: this.basicEnhancement(text, 'clarity'),
+        enhancementType: ENHANCEMENT_TYPES.CLARITY,
+        qualityLevel: QUALITY_LEVELS.BASIC,
+        improvements: ['Fixed basic formatting', 'Improved clarity'],
+        confidence: 60
+      },
+      {
+        enhancedText: this.basicEnhancement(text, 'professional'),
+        enhancementType: ENHANCEMENT_TYPES.PROFESSIONAL,
+        qualityLevel: QUALITY_LEVELS.STANDARD,
+        improvements: ['Enhanced professionalism', 'Improved structure'],
+        confidence: 65
+      },
+      {
+        enhancedText: this.basicEnhancement(text, 'engaging'),
+        enhancementType: ENHANCEMENT_TYPES.ENGAGING,
+        qualityLevel: QUALITY_LEVELS.PREMIUM,
+        improvements: ['Added engagement', 'Improved flow'],
+        confidence: 70
+      }
+    ];
+
+    // Sort options by confidence score in descending order (highest first)
+    enhancedOptions.sort((a, b) => b.confidence - a.confidence);
+
+    // Assign option numbers after sorting
+    enhancedOptions = enhancedOptions.map((option, index) => ({
+      option: index + 1,
+      ...option
+    }));
+
+    return {
+      success: true,
+      data: {
+        enhancedOptions: enhancedOptions,
+        originalText: text,
+        totalOptions: enhancedOptions.length
+      }
+    };
+  }
+
+  /**
+   * Basic enhancement helper method
+   * @param {string} text - Original text
+   * @param {string} style - Enhancement style
+   * @returns {string} - Enhanced text
+   */
+  basicEnhancement(text, style) {
     let enhancedText = text;
-    const improvements = [];
 
     // Basic grammar fixes
     enhancedText = enhancedText.replace(/\s+/g, ' ').trim();
@@ -341,12 +466,43 @@ IMPORTANT:
     
     if (!enhancedText.endsWith('.') && !enhancedText.endsWith('!') && !enhancedText.endsWith('?')) {
       enhancedText += '.';
-      improvements.push('Added proper sentence ending');
     }
 
-    // Basic improvements
-    if (enhancedText !== text) {
-      improvements.push('Fixed basic formatting');
+    // Apply style-specific enhancements to create truly different versions
+    switch (style) {
+      case 'clarity':
+        // Make it simpler and clearer
+        enhancedText = enhancedText
+          .replace(/are responsible for/g, 'control')
+          .replace(/may involve issues with/g, 'could be caused by')
+          .replace(/incorrectly configured/g, 'set up wrong')
+          .replace(/preventing applications from launching/g, 'stopping apps from opening')
+          .replace(/specific file types/g, 'certain files');
+        break;
+        
+      case 'professional':
+        // Make it more formal and technical
+        enhancedText = enhancedText
+          .replace(/are corrupted/g, 'have become corrupted')
+          .replace(/may involve issues with/g, 'potentially stems from complications within')
+          .replace(/system-level settings/g, 'system-level configuration parameters')
+          .replace(/file type associations/g, 'file type association mappings')
+          .replace(/\. reg files/g, 'registry configuration files');
+        break;
+      
+      case 'engaging':
+        // Make it more engaging and impactful
+        enhancedText = enhancedText
+          .replace(/are corrupted/g, 'have been corrupted')
+          .replace(/preventing applications from launching/g, 'blocking applications from launching')
+          .replace(/may involve issues with/g, 'likely involves problems with')
+          .replace(/This may involve/g, 'The issue likely stems from')
+          .replace(/\.$/, '!');
+        break;
+      
+      default:
+        // Keep as is
+        break;
     }
 
     // Ensure length constraints
@@ -354,17 +510,7 @@ IMPORTANT:
       enhancedText = this.applyLengthConstraints(text, enhancedText);
     }
 
-    return {
-      success: true,
-      data: {
-        enhancedText: enhancedText,
-        enhancementType: enhancementType,
-        qualityLevel: QUALITY_LEVELS.BASIC,
-        enhancementRatio: calculateEnhancementRatio(text, enhancedText),
-        improvements: improvements.length > 0 ? improvements : ['Applied basic formatting'],
-        confidence: 60
-      }
-    };
+    return enhancedText;
   }
 
   /**

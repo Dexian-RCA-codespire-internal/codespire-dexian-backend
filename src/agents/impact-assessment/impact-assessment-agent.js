@@ -54,9 +54,14 @@ class ImpactAssessmentAgent {
       );
 
       if (!llmResponse.success) {
-        // If API quota exceeded, provide a fallback response
-        if (llmResponse.error && llmResponse.error.includes('quota')) {
-          console.log('⚠️ API quota exceeded, using fallback assessment');
+        // If API quota exceeded or service unavailable, provide a fallback response
+        if (llmResponse.error && (
+          llmResponse.error.includes('quota') || 
+          llmResponse.error.includes('overloaded') ||
+          llmResponse.error.includes('503') ||
+          llmResponse.error.includes('Service Unavailable')
+        )) {
+          console.log('⚠️ API service unavailable or overloaded, using fallback assessment');
           return this.generateFallbackAssessment(input);
         }
         
