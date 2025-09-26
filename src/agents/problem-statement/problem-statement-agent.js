@@ -217,7 +217,7 @@ ${context.description ? `Additional Description: ${context.description}` : ''}${
 
 Requirements:
 1. Generate THREE different problem definitions (30-50 words each) that clearly describe the issue from different perspectives
-2. Generate ONE specific, targeted question (MAXIMUM 25 words) that directly relates to this exact problem (NOT a generic question like "What happened?" or "Describe the symptoms")
+2. Generate ONE specific, targeted question (MAXIMUM 30 words) that directly relates to this exact problem (NOT a generic question like "What happened?" or "Describe the symptoms")
 3. Determine the issue type from: ${context.availableIssueTypes.join(', ')}
 4. Determine the severity level from: ${context.availableSeverityLevels.join(', ')}
 5. Determine the business impact category from: ${context.availableBusinessImpactCategories.join(', ')}
@@ -229,7 +229,7 @@ Respond in the following JSON format:
     "Second problem definition (30-50 words) - focus on business impact", 
     "Third problem definition (30-50 words) - focus on user experience"
   ],
-  "question": "One specific, concise question (max 25 words) directly related to this exact problem",
+  "question": "One specific, concise question (max 30 words) directly related to this exact problem",
   "issueType": "One of the available issue types",
   "severity": "One of the available severity levels", 
   "businessImpact": "One of the available business impact categories",
@@ -241,7 +241,7 @@ Focus on:
 - Appropriate severity assessment
 - Realistic business impact evaluation
 - Clear, actionable problem definitions from multiple angles
-- SPECIFIC, CONCISE question (max 25 words) that targets the root cause, investigation path, or solution approach
+- SPECIFIC, CONCISE question (max 30 words) that targets the root cause, investigation path, or solution approach
 - AVOID generic questions - make the question contextually relevant to the specific issue described`;
     }
 
@@ -293,8 +293,11 @@ Focus on:
             errors.push('question is required and must be a non-empty string');
         } else {
             const wordCount = response.question.trim().split(/\s+/).length;
-            if (wordCount > 25) {
-                errors.push(`question must not exceed 25 words (current: ${wordCount} words)`);
+            if (wordCount > 35) {
+                // If question is too long, truncate it instead of failing
+                const words = response.question.trim().split(/\s+/);
+                response.question = words.slice(0, 30).join(' ') + (words.length > 30 ? '...' : '');
+                console.warn(`⚠️ Question was truncated from ${wordCount} words to 30 words`);
             }
         }
 
