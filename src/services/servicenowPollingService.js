@@ -2,6 +2,7 @@
 const cron = require('node-cron');
 const { fetchTicketsAndSave } = require('./servicenowIngestionService');
 const { webSocketService } = require('./websocketService');
+const { notificationService } = require('./notificationService');
 const config = require('../config');
 const mongoose = require('mongoose');
 
@@ -452,12 +453,19 @@ class ServiceNowPollingService {
         });
 
         // Emit notification for new tickets
-        if (newTicketsCount > 0) {
-          webSocketService.emitNotification(
-            `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
-            'success'
-          );
-        }
+        // if (newTicketsCount > 0) {
+        //   await notificationService.createAndBroadcast({
+        //     title: "New tickets found",
+        //     message: `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
+        //     type: "success",
+        //     metadata: {
+        //       newTicketsCount,
+        //       updatedTicketsCount,
+        //       totalProcessed: result.total,
+        //       source: "polling"
+        //     }
+        //   });
+        // }
 
       } else {
         throw new Error(result.error || 'Unknown error during polling');

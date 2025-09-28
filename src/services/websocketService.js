@@ -140,7 +140,7 @@ class WebSocketService {
       timestamp: new Date().toISOString()
     };
 
-    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients:`, eventData);
+    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients`);
     this.io.emit('polling_status', eventData);
     console.log(`✅ Polling status emitted successfully`);
   }
@@ -165,6 +165,48 @@ class WebSocketService {
 
     this.io.emit('notification', eventData);
     console.log(`📡 Emitted notification to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA warning event
+   * @param {Object} slaData - SLA warning data
+   */
+  emitSLAWarning(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:warning', slaData);
+    console.log(`📡 Emitted SLA warning for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA critical event
+   * @param {Object} slaData - SLA critical data
+   */
+  emitSLACritical(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:critical', slaData);
+    console.log(`📡 Emitted SLA critical for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA breach event
+   * @param {Object} slaData - SLA breach data
+   */
+  emitSLABreach(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:breach', slaData);
+    console.log(`📡 Emitted SLA breach for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
   }
 
   /**

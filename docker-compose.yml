@@ -17,22 +17,22 @@ services:
       retries: 3
 
   # Redis Cache
-  redis:
-    image: redis:7.2-alpine
-    container_name: dexian-backend-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - dexian-backend-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # redis:
+  #   image: redis:7.2-alpine
+  #   container_name: dexian-backend-redis
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - dexian-backend-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # SuperTokens Core
   supertokens:
@@ -76,53 +76,53 @@ services:
       retries: 3
 
   # Azure Storage Emulator (Azurite)
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    container_name: dexian-backend-azurite
-    restart: unless-stopped
-    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /workspace --debug /workspace/debug.log
-    ports:
-      - "10000:10000"  # Blob service
-      - "10001:10001"  # Queue service
-      - "10002:10002"  # Table service
-    volumes:
-      - azurite_data:/workspace
-    networks:
-      - dexian-backend-network
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10000/devstoreaccount1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+  # azurite:
+  #   image: mcr.microsoft.com/azure-storage/azurite:latest
+  #   container_name: dexian-backend-azurite
+  #   restart: unless-stopped
+  #   command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /workspace --debug /workspace/debug.log
+  #   ports:
+  #     - "10000:10000"  # Blob service
+  #     - "10001:10001"  # Queue service
+  #     - "10002:10002"  # Table service
+  #   volumes:
+  #     - azurite_data:/workspace
+  #   networks:
+  #     - dexian-backend-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10000/devstoreaccount1 || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
 
   # AWS S3 LocalStack (for local S3 development)
-  localstack:
-    image: localstack/localstack:latest
-    container_name: dexian-backend-localstack
-    restart: unless-stopped
-    environment:
-      SERVICES: s3
-      DEBUG: 1
-      DATA_DIR: /tmp/localstack/data
-      DOCKER_HOST: unix:///var/run/docker.sock
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
-      PERSISTENCE: 1
-    ports:
-      - "4566:4566"  # LocalStack
-    volumes:
-      - localstack_data:/tmp/localstack
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - dexian-backend-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+  # localstack:
+  #   image: localstack/localstack:latest
+  #   container_name: dexian-backend-localstack
+  #   restart: unless-stopped
+  #   environment:
+  #     SERVICES: s3
+  #     DEBUG: 1
+  #     DATA_DIR: /tmp/localstack/data
+  #     DOCKER_HOST: unix:///var/run/docker.sock
+  #     AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  #     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+  #     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+  #     PERSISTENCE: 1
+  #   ports:
+  #     - "4566:4566"  # LocalStack
+  #   volumes:
+  #     - localstack_data:/tmp/localstack
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   networks:
+  #     - dexian-backend-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
 
   # Qdrant Vector Database
   qdrant:

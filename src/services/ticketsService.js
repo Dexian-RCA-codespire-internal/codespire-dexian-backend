@@ -1,5 +1,7 @@
 // new file servicenow
 const Ticket = require('../models/Tickets');
+const { notificationService } = require('./notificationService');
+const { createOrUpdateSLA } = require('./slaService');
 
 /**
  * Fetch tickets from MongoDB database
@@ -373,6 +375,9 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
       };
     }
 
+    // Capture previous status before update
+    const previousStatus = ticket.status;
+    
     // Remove fields that shouldn't be updated directly
     const { _id, ticket_id, source: ticketSource, createdAt, updatedAt, ...allowedUpdates } = updateData;
     
@@ -395,6 +400,40 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
         error: 'Failed to update ticket',
         data: null
       };
+    }
+
+    // Persist notification for updated ticket
+    try {
+      if (previousStatus !== updatedTicket.status) {
+        // Status changed
+        await notificationService.createAndBroadcast({
+          title: "Ticket status changed",
+          message: `Ticket ${updatedTicket.ticket_id} status: ${previousStatus} → ${updatedTicket.status}`,
+          type: "info",
+          related: {
+            ticketMongoId: updatedTicket._id,
+            ticket_id: updatedTicket.ticket_id,
+            eventType: "status_changed"
+          }
+        });
+      } 
+
+    } catch (notificationError) {
+      console.error(`⚠️ Failed to create notification for ticket update:`, notificationError.message);
+      // Don't fail the update if notification fails
+    }
+
+    // Update SLA record for the updated ticket
+    try {
+      const slaResult = await createOrUpdateSLA(updatedTicket);
+      if (slaResult.success) {
+        console.log(`✅ Updated SLA record for ticket: ${updatedTicket.ticket_id}`);
+      } else {
+        console.log(`⚠️ Failed to update SLA for ticket ${updatedTicket.ticket_id}: ${slaResult.error}`);
+      }
+    } catch (slaError) {
+      console.error(`❌ Error updating SLA for ticket ${updatedTicket.ticket_id}:`, slaError.message);
+      // Don't fail the entire process if SLA update fails
     }
 
     console.log(`✅ Updated ticket: ${updatedTicket.ticket_id}`);
