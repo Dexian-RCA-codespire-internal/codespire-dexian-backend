@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
-const { doc } = require('../utils/apiDoc');
+// API documentation removed
 const {
   upload,
   uploadFile,
@@ -35,37 +35,21 @@ const presignedUrlValidation = [
 
 // File Storage Routes
 router.post('/upload', 
-  doc.create('/s3/upload', 'Upload a file to S3 storage', ['File Storage'], {
-    type: 'object',
-    properties: {
-      file: {
-        type: 'string',
-        format: 'binary',
-        description: 'File to upload (multipart/form-data)'
-      }
-    },
-    required: ['file']
-  }),
   authenticateToken, upload.single('file'), uploadValidation, uploadFile);
 
 router.get('/download/:fileName', 
-  doc.getById('/s3/download/{fileName}', 'Download a file from S3 storage', ['File Storage']),
   authenticateToken, fileNameValidation, downloadFile);
 
 router.delete('/:fileName', 
-  doc.delete('/s3/{fileName}', 'Delete a file from S3 storage', ['File Storage']),
   authenticateToken, fileNameValidation, deleteFile);
 
 router.get('/list', 
-  doc.getList('/s3/list', 'List files in S3 storage', ['File Storage']),
   authenticateToken, listValidation, listFiles);
 
 router.get('/presigned/:fileName', 
-  doc.getById('/s3/presigned/{fileName}', 'Generate presigned URL for file access', ['File Storage']),
   authenticateToken, fileNameValidation, presignedUrlValidation, getPresignedUrl);
 
 router.get('/metadata/:fileName', 
-  doc.getById('/s3/metadata/{fileName}', 'Get file metadata and information', ['File Storage']),
   authenticateToken, fileNameValidation, getFileMetadata);
 
 module.exports = router;

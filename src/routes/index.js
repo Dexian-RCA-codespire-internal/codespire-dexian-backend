@@ -17,6 +17,7 @@ const slaMonitoringRoutes = require('./slaMonitoring');
 const rcaGenerationRoutes = require('./rcaGeneration');
 const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
+const aiRoutes = require('./ai');
 const problemStatementRoutes = require('./problemStatement');
 const timelineContextRoutes = require('./timelineContext');
 const impactAssessmentRoutes = require('./impactAssessment');
@@ -36,6 +37,7 @@ router.use('/rca', rcaGenerationRoutes);
 router.use('/auto-suggestion', autoSuggestionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
+router.use('/ai', aiRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/sla', slaRoutes);
 router.use('/sla/monitoring', slaMonitoringRoutes);
@@ -66,6 +68,7 @@ router.get('/', (req, res) => {
       chat: '/chat',
       notifications: '/notifications',
       playbooks: '/playbooks',
+      ai: '/ai',
       problemStatement: '/problem-statement',
       timelineContext: '/timeline-context',
       impactAssessment: '/impact-assessment',

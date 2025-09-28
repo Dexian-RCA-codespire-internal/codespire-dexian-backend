@@ -4,7 +4,7 @@
  */
 
 const express = require('express');
-const { doc } = require('../utils/apiDoc');
+// API documentation removed
 const router = express.Router();
 const {
   getPollingStatus,
@@ -23,32 +23,25 @@ const {
 
 // Polling Management Routes
 router.get('/status', 
-  doc.get('/servicenow-polling/status', 'Get current status of ServiceNow polling service', ['ServiceNow', 'Polling']),
   getPollingStatus);
 
 router.get('/health-check', 
-  doc.get('/servicenow-polling/health-check', 'Perform immediate ServiceNow health check (credentials + connectivity)', ['ServiceNow', 'Health']),
   performHealthCheck);
 
 router.post('/start', 
-  doc.post('/servicenow-polling/start', 'Start the ServiceNow ticket polling service', ['ServiceNow', 'Polling']),
   startPolling);
 
 router.post('/stop', 
-  doc.post('/servicenow-polling/stop', 'Stop the ServiceNow ticket polling service', ['ServiceNow', 'Polling']),
   stopPolling);
 
 router.post('/poll', 
-  doc.post('/servicenow-polling/poll', 'Trigger a manual poll for new/updated tickets', ['ServiceNow', 'Polling']),
   triggerManualPoll);
 
 router.post('/reset', 
-  doc.post('/servicenow-polling/reset', 'Reset polling state (use with caution - this will clear polling history)', ['ServiceNow', 'Polling']),
   resetPollingState);
 
 // Bulk Import Management Routes
 router.get('/bulk-import/status', 
-  doc.get('/servicenow-polling/bulk-import/status', 'Get status of bulk import operations', ['ServiceNow', 'Bulk Import']),
   async (req, res) => {
     try {
       const status = await getBulkImportStatus();
@@ -68,7 +61,6 @@ router.get('/bulk-import/status',
   });
 
 router.post('/bulk-import/start', 
-  doc.post('/servicenow-polling/bulk-import/start', 'Start manual bulk import of tickets from ServiceNow', ['ServiceNow', 'Bulk Import']),
   async (req, res) => {
     try {
       const { force = false, batchSize = 1000, query = '' } = req.body;
@@ -113,7 +105,6 @@ router.post('/bulk-import/start',
   });
 
 router.post('/bulk-import/reset', 
-  doc.post('/servicenow-polling/bulk-import/reset', 'Reset bulk import state (dangerous operation)', ['ServiceNow', 'Bulk Import']),
   async (req, res) => {
     try {
       const { confirm } = req.body;
@@ -143,7 +134,6 @@ router.post('/bulk-import/reset',
 
 // Vectorization Service Routes
 router.get('/vectorization/health', 
-  doc.get('/servicenow-polling/vectorization/health', 'Check health status of ticket vectorization service', ['ServiceNow', 'Vectorization']),
   async (req, res) => {
     try {
       const ticketVectorizationService = require('../services/ticketVectorizationService');

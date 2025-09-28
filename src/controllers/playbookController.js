@@ -123,8 +123,32 @@ class PlaybookController {
    */
   async createPlaybook(req, res) {
     try {
-      const playbookData = req.body;
-      const result = await playbookService.createPlaybook(playbookData);
+      const { triggers, ...otherData } = req.body;
+
+      // Only accept new "triggers" format - no backward compatibility
+      if (!triggers || !Array.isArray(triggers) || triggers.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggers array is required and must not be empty'
+        });
+      }
+
+      // Validate triggers structure
+      for (const trigger of triggers) {
+        if (!trigger.trigger_id || !trigger.title || !trigger.action || !trigger.expected_outcome) {
+          return res.status(400).json({
+            success: false,
+            error: 'Each trigger must have trigger_id, title, action, and expected_outcome'
+          });
+        }
+      }
+
+      const processedData = {
+        ...otherData,
+        triggers: triggers
+      };
+
+      const result = await playbookService.createPlaybook(processedData);
       
       if (result.success) {
         res.status(201).json(result);
@@ -180,8 +204,34 @@ class PlaybookController {
   async updatePlaybook(req, res) {
     try {
       const { id } = req.params;
-      const updateData = req.body;
-      const result = await playbookService.updatePlaybook(id, updateData);
+      const { triggers, ...otherData } = req.body;
+
+      // Only accept new "triggers" format - no backward compatibility
+      if (triggers && (!Array.isArray(triggers) || triggers.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggers array must not be empty if provided'
+        });
+      }
+
+      // Validate triggers structure if provided
+      if (triggers && triggers.length > 0) {
+        for (const trigger of triggers) {
+          if (!trigger.trigger_id || !trigger.title || !trigger.action || !trigger.expected_outcome) {
+            return res.status(400).json({
+              success: false,
+              error: 'Each trigger must have trigger_id, title, action, and expected_outcome'
+            });
+          }
+        }
+      }
+
+      const processedData = {
+        ...otherData,
+        ...(triggers && { triggers: triggers })
+      };
+
+      const result = await playbookService.updatePlaybook(id, processedData);
       
       if (result.success) {
         res.status(200).json(result);
@@ -250,7 +300,7 @@ class PlaybookController {
    * @swagger
    * /api/v1/playbooks/search:
    *   get:
-   *     summary: Search playbooks
+   *     summary: Search playbooks (text search)
    *     tags: [Playbooks]
    *     parameters:
    *       - in: query
@@ -374,6 +424,274 @@ class PlaybookController {
 
   /**
    * @swagger
+   * /api/v1/playbooks/search/vector:
+   *   get:
+   *     summary: Search playbooks using vector similarity
+   *     tags: [Playbooks]
+   *     parameters:
+   *       - in: query
+   *         name: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Search query for vector similarity
+   *       - in: query
+   *         name: topK
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *         description: Number of results to return
+   *       - in: query
+   *         name: minScore
+   *         schema:
+   *           type: number
+   *           default: 0.7
+   *         description: Minimum similarity score
+   *       - in: query
+   *         name: priority
+   *         schema:
+   *           type: string
+   *           enum: [Low, Medium, High, Critical]
+   *         description: Filter by priority
+   *       - in: query
+   *         name: tags
+   *         schema:
+   *           type: string
+   *         description: Comma-separated list of tags to filter by
+   *     responses:
+   *       200:
+   *         description: Vector search results
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       playbook_id:
+   *                         type: string
+   *                       title:
+   *                         type: string
+   *                       description:
+   *                         type: string
+   *                       similarity_score:
+   *                         type: number
+   *                 count:
+   *                   type: number
+   *                 search_type:
+   *                   type: string
+   */
+  async searchPlaybooksByVector(req, res) {
+    try {
+      const { query, topK, minScore, priority, tags } = req.query;
+      
+      if (!query) {
+        return res.status(400).json({
+          success: false,
+          error: 'Query parameter is required'
+        });
+      }
+
+      const options = {};
+      if (topK) options.topK = parseInt(topK);
+      if (minScore) options.minScore = parseFloat(minScore);
+      
+      const filters = {};
+      if (priority) filters.priority = priority;
+      if (tags) filters.tags = tags.split(',').map(tag => tag.trim());
+      
+      if (Object.keys(filters).length > 0) {
+        options.filters = filters;
+      }
+
+      const result = await playbookService.searchPlaybooksByVector(query, options);
+      
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Error in searchPlaybooksByVector controller:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        details: error.message
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/playbooks/search/hybrid:
+   *   get:
+   *     summary: Hybrid search combining text and vector similarity
+   *     tags: [Playbooks]
+   *     parameters:
+   *       - in: query
+   *         name: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Search query
+   *       - in: query
+   *         name: vectorWeight
+   *         schema:
+   *           type: number
+   *           default: 0.7
+   *         description: Weight for vector similarity (0-1)
+   *       - in: query
+   *         name: textWeight
+   *         schema:
+   *           type: number
+   *           default: 0.3
+   *         description: Weight for text search (0-1)
+   *       - in: query
+   *         name: maxResults
+   *         schema:
+   *           type: integer
+   *           default: 10
+   *         description: Maximum number of results
+   *       - in: query
+   *         name: priority
+   *         schema:
+   *           type: string
+   *           enum: [Low, Medium, High, Critical]
+   *         description: Filter by priority
+   *       - in: query
+   *         name: tags
+   *         schema:
+   *           type: string
+   *         description: Comma-separated list of tags to filter by
+   *     responses:
+   *       200:
+   *         description: Hybrid search results
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       playbook_id:
+   *                         type: string
+   *                       title:
+   *                         type: string
+   *                       description:
+   *                         type: string
+   *                       combined_score:
+   *                         type: number
+   *                       search_type:
+   *                         type: string
+   *                 count:
+   *                   type: number
+   *                 search_type:
+   *                   type: string
+   *                 weights:
+   *                   type: object
+   */
+  async hybridSearchPlaybooks(req, res) {
+    try {
+      const { query, vectorWeight, textWeight, maxResults, priority, tags } = req.query;
+      
+      if (!query) {
+        return res.status(400).json({
+          success: false,
+          error: 'Query parameter is required'
+        });
+      }
+
+      const options = {};
+      if (vectorWeight) options.vectorWeight = parseFloat(vectorWeight);
+      if (textWeight) options.textWeight = parseFloat(textWeight);
+      if (maxResults) options.maxResults = parseInt(maxResults);
+      
+      const filters = {};
+      if (priority) filters.priority = priority;
+      if (tags) filters.tags = tags.split(',').map(tag => tag.trim());
+      
+      if (Object.keys(filters).length > 0) {
+        options.filters = filters;
+      }
+
+      const result = await playbookService.hybridSearchPlaybooks(query, options);
+      
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Error in hybridSearchPlaybooks controller:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        details: error.message
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/playbooks/vectorization/health:
+   *   get:
+   *     summary: Get vectorization service health status
+   *     tags: [Playbooks]
+   *     responses:
+   *       200:
+   *         description: Vectorization service health status
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     qdrant:
+   *                       type: boolean
+   *                     embeddings:
+   *                       type: boolean
+   *                     initialized:
+   *                       type: boolean
+   *                     collection_name:
+   *                       type: string
+   *                     config:
+   *                       type: object
+   */
+  async getVectorizationHealth(req, res) {
+    try {
+      const result = await playbookService.getVectorizationHealth();
+      
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Error in getVectorizationHealth controller:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        details: error.message
+      });
+    }
+  }
+
+  /**
+   * @swagger
    * /api/v1/playbooks/{playbookId}/increment-usage:
    *   post:
    *     summary: Increment usage count for a playbook
@@ -408,6 +726,29 @@ class PlaybookController {
         error: 'Internal server error',
         details: error.message
       });
+    }
+  }
+
+  /**
+   * Get playbooks by their IDs
+   * @param {Array} playbookIds - Array of playbook IDs
+   * @returns {Promise<Array>} Array of playbooks
+   */
+  async getPlaybooksByIds(playbookIds) {
+    try {
+      console.log('🔍 Getting playbooks by IDs:', playbookIds);
+      
+      if (!Array.isArray(playbookIds) || playbookIds.length === 0) {
+        throw new Error('playbookIds must be a non-empty array');
+      }
+
+      const playbooks = await playbookService.getPlaybooksByIds(playbookIds);
+      console.log(`✅ Found ${playbooks.length} playbooks`);
+      
+      return playbooks;
+    } catch (error) {
+      console.error('❌ Error getting playbooks by IDs:', error);
+      throw error;
     }
   }
 }

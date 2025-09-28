@@ -23,10 +23,10 @@ const config = defaultConfig.createRAGAgentConfig('ticket-similarity', {
     // Text processing with ticket-specific field weights
     textProcessing: {
         fieldWeights: {
-            short_description: 0.35,
-            description: 0.35,
-            category: 0.20,
-            source: 0.10
+            short_description: 0.40,
+            description: 0.40,
+            category: 0.20
+            // Note: source field removed as it's not used in search agent
         }
     },
     
