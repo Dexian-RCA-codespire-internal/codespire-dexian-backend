@@ -39,10 +39,21 @@ const requireRole = (role) => {
   return async (req, res, next) => {
     try {
       const userId = req.session.getUserId();
+      console.log('🔍 Checking role for user:', userId, 'required role:', role);
       
       // Check if user has the required role in SuperTokens
-      const userRoles = await UserRoles.getRolesForUser(userId);
+      let userRoles;
+      try {
+        userRoles = await UserRoles.getRolesForUser("public", userId);
+        console.log('🔍 User roles (with tenantId):', userRoles);
+      } catch (error) {
+        console.log('🔍 First attempt failed, trying without tenantId:', error.message);
+        userRoles = await UserRoles.getRolesForUser(userId);
+        console.log('🔍 User roles (without tenantId):', userRoles);
+      }
+      
       const hasRole = userRoles.roles.includes(role);
+      console.log('🔍 User has required role:', hasRole);
       
       if (!hasRole) {
         return res.status(403).json({ 
@@ -56,7 +67,7 @@ const requireRole = (role) => {
       req.userRoles = userRoles.roles;
       next();
     } catch (err) {
-      console.error('Role check error:', err);
+      console.error('🔍 Role check error:', err);
       return res.status(403).json({ 
         success: false,
         error: 'Authentication failed' 
@@ -65,15 +76,78 @@ const requireRole = (role) => {
   };
 };
 
+// Helper function to get user permissions from roles
+const getUserPermissions = async (userId) => {
+  try {
+    console.log('🔍 Getting permissions for user:', userId);
+    
+    // Get user roles first - try different API signatures
+    let userRoles;
+    try {
+      // Try with tenantId parameter
+      userRoles = await UserRoles.getRolesForUser("public", userId);
+      console.log('🔍 User roles (with tenantId):', userRoles);
+    } catch (error) {
+      console.log('🔍 First attempt failed, trying without tenantId:', error.message);
+      try {
+        // Try without tenantId parameter
+        userRoles = await UserRoles.getRolesForUser(userId);
+        console.log('🔍 User roles (without tenantId):', userRoles);
+      } catch (error2) {
+        console.error('🔍 Both attempts failed:', error2.message);
+        throw error2;
+      }
+    }
+    
+    if (!userRoles || !userRoles.roles || userRoles.roles.length === 0) {
+      console.log('🔍 No roles found for user');
+      return [];
+    }
+    
+    console.log('🔍 User has roles:', userRoles.roles);
+    const allPermissions = [];
+    
+    // Get permissions for each role
+    for (const role of userRoles.roles) {
+      console.log('🔍 Getting permissions for role:', role);
+      try {
+        const rolePermissions = await UserRoles.getPermissionsForRole(role);
+        console.log('🔍 Role permissions response:', rolePermissions);
+        
+        if (rolePermissions.status !== "UNKNOWN_ROLE_ERROR" && rolePermissions.permissions) {
+          console.log('🔍 Role', role, 'has permissions:', rolePermissions.permissions);
+          allPermissions.push(...rolePermissions.permissions);
+        } else {
+          console.log('🔍 Role', role, 'has no permissions or unknown role error');
+        }
+      } catch (roleError) {
+        console.error('🔍 Error getting permissions for role', role, ':', roleError);
+      }
+    }
+    
+    // Remove duplicates
+    const uniquePermissions = [...new Set(allPermissions)];
+    console.log('🔍 Final user permissions:', uniquePermissions);
+    return uniquePermissions;
+  } catch (error) {
+    console.error('🔍 Error getting user permissions:', error);
+    return [];
+  }
+};
+
 // Permission-based access control using SuperTokens
 const requirePermission = (permission) => {
   return async (req, res, next) => {
     try {
       const userId = req.session.getUserId();
       
-      // Check if user has the required permission in SuperTokens
-      const userPermissions = await UserRoles.getPermissionsForUser(userId);
-      const hasPermission = userPermissions.permissions.includes(permission);
+      // Get user permissions from roles
+      const userPermissions = await getUserPermissions(userId);
+      const hasPermission = userPermissions.includes(permission);
+      
+      console.log('🔐 User permissions:', userPermissions);
+      console.log('🔐 Required permission:', permission);
+      console.log('🔐 Has permission:', hasPermission);
       
       if (!hasPermission) {
         return res.status(403).json({ 
@@ -84,7 +158,7 @@ const requirePermission = (permission) => {
       }
       
       // Add user permissions to request object for use in controllers
-      req.userPermissions = userPermissions.permissions;
+      req.userPermissions = userPermissions;
       next();
     } catch (err) {
       console.error('Permission check error:', err);
@@ -132,9 +206,13 @@ const requireAnyPermission = (permissions) => {
     try {
       const userId = req.session.getUserId();
       
-      // Check if user has any of the required permissions in SuperTokens
-      const userPermissions = await UserRoles.getPermissionsForUser(userId);
-      const hasAnyPermission = permissions.some(permission => userPermissions.permissions.includes(permission));
+      // Get user permissions from roles
+      const userPermissions = await getUserPermissions(userId);
+      const hasAnyPermission = permissions.some(permission => userPermissions.includes(permission));
+      
+      console.log('🔐 User permissions:', userPermissions);
+      console.log('🔐 Required permissions (any):', permissions);
+      console.log('🔐 Has any permission:', hasAnyPermission);
       
       if (!hasAnyPermission) {
         return res.status(403).json({ 
@@ -144,7 +222,7 @@ const requireAnyPermission = (permissions) => {
         });
       }
       
-      req.userPermissions = userPermissions.permissions;
+      req.userPermissions = userPermissions;
       next();
     } catch (err) {
       console.error('Permission check error:', err);

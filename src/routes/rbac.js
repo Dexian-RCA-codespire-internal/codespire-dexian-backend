@@ -49,4 +49,113 @@ router.get('/users/:userId/sync', authenticateToken, requirePermission('users:re
 // Initialize default roles and permissions (admin only)
 router.post('/initialize', authenticateToken, requirePermission('roles:write'), RBACController.initializeDefaults);
 
+// Debug endpoint to check current user's roles and permissions
+router.get('/debug/current-user', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.session.getUserId();
+    const RBACService = require('../services/rbacService');
+    
+    console.log('🔍 Debug: Checking current user:', userId);
+    
+    const rolesResult = await RBACService.getUserRoles(userId);
+    const permissionsResult = await RBACService.getUserPermissions(userId);
+    
+    res.json({
+      success: true,
+      userId: userId,
+      roles: rolesResult.success ? rolesResult.roles : [],
+      permissions: permissionsResult.success ? permissionsResult.permissions : [],
+      rolesResult: rolesResult,
+      permissionsResult: permissionsResult
+    });
+  } catch (error) {
+    console.error('🔍 Debug endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint without authentication to check session status
+router.get('/debug/session', async (req, res) => {
+  try {
+    console.log('🔍 Debug: Checking session status');
+    console.log('🔍 Headers:', req.headers);
+    console.log('🔍 Cookies:', req.cookies);
+    console.log('🔍 Session exists:', !!req.session);
+    
+    if (req.session) {
+      try {
+        const userId = req.session.getUserId();
+        console.log('🔍 User ID from session:', userId);
+        
+        const RBACService = require('../services/rbacService');
+        const rolesResult = await RBACService.getUserRoles(userId);
+        const permissionsResult = await RBACService.getUserPermissions(userId);
+        
+        res.json({
+          success: true,
+          sessionExists: true,
+          userId: userId,
+          roles: rolesResult.success ? rolesResult.roles : [],
+          permissions: permissionsResult.success ? permissionsResult.permissions : [],
+          rolesResult: rolesResult,
+          permissionsResult: permissionsResult
+        });
+      } catch (sessionError) {
+        console.error('🔍 Session error:', sessionError);
+        res.json({
+          success: false,
+          sessionExists: true,
+          error: sessionError.message
+        });
+      }
+    } else {
+      res.json({
+        success: false,
+        sessionExists: false,
+        message: 'No session found'
+      });
+    }
+  } catch (error) {
+    console.error('🔍 Debug session endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint to test role assignment (no auth required for testing)
+router.post('/debug/assign-role', async (req, res) => {
+  try {
+    const { userId, role } = req.body;
+    
+    if (!userId || !role) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and role are required'
+      });
+    }
+    
+    console.log('🔍 Debug: Assigning role', role, 'to user', userId);
+    
+    const RBACService = require('../services/rbacService');
+    const result = await RBACService.assignRoleToUser(userId, role);
+    
+    res.json({
+      success: result.success,
+      message: result.message,
+      error: result.error
+    });
+  } catch (error) {
+    console.error('🔍 Debug assign role error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

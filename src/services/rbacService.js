@@ -44,8 +44,8 @@ class RBACService {
    */
   static async assignRoleToUser(userId, role) {
     try {
-      // Assign role in SuperTokens
-      const result = await UserRoles.addRoleToUser(userId, role);
+      // Assign role in SuperTokens, public is the tenant id
+      const result = await UserRoles.addRoleToUser("public",userId, role);
       
       if (result.status === 'OK') {
         // Sync with MongoDB
@@ -127,14 +127,24 @@ class RBACService {
    */
   static async getUserRoles(userId) {
     try {
-      const roles = await UserRoles.getRolesForUser(userId);
+      console.log('🔍 RBACService: Getting roles for user:', userId);
+      
+      let roles;
+      try {
+        roles = await UserRoles.getRolesForUser("public", userId);
+        console.log('🔍 RBACService: User roles (with tenantId):', roles);
+      } catch (error) {
+        console.log('🔍 RBACService: First attempt failed, trying without tenantId:', error.message);
+        roles = await UserRoles.getRolesForUser(userId);
+        console.log('🔍 RBACService: User roles (without tenantId):', roles);
+      }
       
       return {
         success: true,
         roles: roles.roles || []
       };
     } catch (error) {
-      console.error('❌ Error getting user roles:', error);
+      console.error('❌ RBACService: Error getting user roles:', error);
       return {
         success: false,
         error: error.message || 'Failed to get user roles'
@@ -143,20 +153,59 @@ class RBACService {
   }
 
   /**
-   * Get user permissions
+   * Get user permissions from roles
    * @param {string} userId - SuperTokens user ID
    * @returns {Object} User permissions
    */
   static async getUserPermissions(userId) {
     try {
-      const permissions = await UserRoles.getPermissionsForUser(userId);
+      console.log('🔍 RBACService: Getting permissions for user:', userId);
+      
+      // Get user roles first - try different API signatures
+      let userRoles;
+      try {
+        userRoles = await UserRoles.getRolesForUser("public", userId);
+        console.log('🔍 RBACService: User roles (with tenantId):', userRoles);
+      } catch (error) {
+        console.log('🔍 RBACService: First attempt failed, trying without tenantId:', error.message);
+        userRoles = await UserRoles.getRolesForUser(userId);
+        console.log('🔍 RBACService: User roles (without tenantId):', userRoles);
+      }
+      
+      if (!userRoles || !userRoles.roles || userRoles.roles.length === 0) {
+        console.log('🔍 RBACService: No roles found for user');
+        return {
+          success: true,
+          permissions: []
+        };
+      }
+      
+      const allPermissions = [];
+      
+      // Get permissions for each role
+      for (const role of userRoles.roles) {
+        console.log('🔍 RBACService: Getting permissions for role:', role);
+        const rolePermissions = await UserRoles.getPermissionsForRole(role);
+        console.log('🔍 RBACService: Role permissions response:', rolePermissions);
+        
+        if (rolePermissions.status !== "UNKNOWN_ROLE_ERROR" && rolePermissions.permissions) {
+          console.log('🔍 RBACService: Role', role, 'has permissions:', rolePermissions.permissions);
+          allPermissions.push(...rolePermissions.permissions);
+        } else {
+          console.log('🔍 RBACService: Role', role, 'has no permissions or unknown role error');
+        }
+      }
+      
+      // Remove duplicates
+      const uniquePermissions = [...new Set(allPermissions)];
+      console.log('🔍 RBACService: Final user permissions:', uniquePermissions);
       
       return {
         success: true,
-        permissions: permissions.permissions || []
+        permissions: uniquePermissions
       };
     } catch (error) {
-      console.error('❌ Error getting user permissions:', error);
+      console.error('❌ RBACService: Error getting user permissions:', error);
       return {
         success: false,
         error: error.message || 'Failed to get user permissions'
@@ -196,8 +245,16 @@ class RBACService {
    */
   static async userHasPermission(userId, permission) {
     try {
-      const permissions = await UserRoles.getPermissionsForUser(userId);
-      const hasPermission = permissions.permissions.includes(permission);
+      // Get user permissions from roles
+      const userPermissions = await this.getUserPermissions(userId);
+      if (!userPermissions.success) {
+        return {
+          success: false,
+          error: userPermissions.error
+        };
+      }
+      
+      const hasPermission = userPermissions.permissions.includes(permission);
       
       return {
         success: true,

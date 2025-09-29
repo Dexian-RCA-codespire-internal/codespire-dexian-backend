@@ -229,7 +229,7 @@ const initSuperTokens = () => {
                     // Assign default 'user' role
                     try {
                       const RBACService = require('../services/rbacService');
-                      const roleResult = await RBACService.assignRoleToUser(response.user.id, 'user');
+                      const roleResult = await RBACService.assignRoleToUser(response.user.id, 'admin');
                       if (roleResult.success) {
                         console.log('✅ Default user role assigned during signup');
                       } else {

@@ -156,7 +156,7 @@ const login = async (req, res) => {
           email: response.user.email,
           name: userMetadata.metadata.name || user.name,
           isEmailVerified: user.isEmailVerified,
-          role: user.role,
+          roles: user.roles,
           lastLoginAt: user.lastLoginAt
         }
       });
@@ -194,7 +194,7 @@ const getProfile = async (req, res) => {
         firstName: user.firstName || userMetadata.metadata.firstName || null,
         lastName: user.lastName || userMetadata.metadata.lastName || null,
         phone: user.phone || userMetadata.metadata.phone || null,
-        role: user.role,
+        roles: user.roles,
         isEmailVerified: user.isEmailVerified,
         status: user.status,
         lastLoginAt: user.lastLoginAt,
@@ -265,7 +265,7 @@ const updateProfile = async (req, res) => {
         firstName: user.firstName || updatedUserMetadata.metadata.firstName || null,
         lastName: user.lastName || updatedUserMetadata.metadata.lastName || null,
         phone: user.phone || updatedUserMetadata.metadata.phone || null,
-        role: user.role,
+        roles: user.roles,
         isEmailVerified: user.isEmailVerified,
         preferences: user.preferences
       }

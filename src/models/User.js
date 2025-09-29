@@ -174,9 +174,21 @@ userSchema.methods.syncRolesFromSuperTokens = async function() {
 userSchema.methods.syncPermissionsFromSuperTokens = async function() {
   try {
     const UserRoles = require('supertokens-node/recipe/userroles');
-    const permissions = await UserRoles.getPermissionsForUser(this.supertokensUserId);
     
-    this.permissions = permissions.permissions || [];
+    // Get user roles first
+    const userRoles = await UserRoles.getRolesForUser(this.supertokensUserId);
+    const allPermissions = [];
+    
+    // Get permissions for each role
+    for (const role of userRoles.roles) {
+      const rolePermissions = await UserRoles.getPermissionsForRole(role);
+      if (rolePermissions.status !== "UNKNOWN_ROLE_ERROR") {
+        allPermissions.push(...rolePermissions.permissions);
+      }
+    }
+    
+    // Remove duplicates and save
+    this.permissions = [...new Set(allPermissions)];
     await this.save();
     return { success: true, permissions: this.permissions };
   } catch (error) {
