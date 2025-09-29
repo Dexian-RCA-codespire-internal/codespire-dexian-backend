@@ -44,36 +44,42 @@ const impactAssessmentController = require('../controllers/impactAssessmentContr
  *                 data:
  *                   type: object
  *                   properties:
- *                     impactAssessment:
- *                       type: string
- *                       description: Detailed assessment of the impact
- *                       example: "Critical system failure affecting all customer transactions with significant revenue impact"
- *                     impactLevel:
- *                       type: string
- *                       description: Impact severity level
- *                       enum: [Sev 1 - Critical Impact, Sev 2 - Major Impact, Sev 3 - Normal Impact, Sev 4 - Minor Impact]
- *                       example: "Sev 1 - Critical Impact"
- *                     department:
- *                       type: string
- *                       description: Primary affected department
- *                       enum: [Customer Support, IT Operations, Sales, Finance, Other, Human Resources]
- *                       example: "IT Operations"
- *                     confidence:
- *                       type: integer
- *                       minimum: 0
- *                       maximum: 100
- *                       description: Confidence level in the assessment (0-100%)
- *                       example: 95
- *                     reasoning:
- *                       type: string
- *                       description: Explanation of the assessment reasoning
- *                       example: "Database server failure during peak business hours affects all customer transactions"
- *                     recommendations:
+ *                     impactAssessments:
  *                       type: array
+ *                       description: Array of three different impact assessments from different perspectives
  *                       items:
- *                         type: string
- *                       description: Recommended actions for mitigation
- *                       example: ["Immediate database server restart", "Implement database failover", "Notify customers of service disruption"]
+ *                         type: object
+ *                         properties:
+ *                           impactAssessment:
+ *                             type: string
+ *                             description: Detailed assessment of the impact from a specific perspective
+ *                             example: "Technical/operational impact assessment focusing on system availability and infrastructure"
+ *                           impactLevel:
+ *                             type: string
+ *                             description: Impact severity level
+ *                             enum: [Sev 1 - Critical Impact, Sev 2 - Major Impact, Sev 3 - Normal Impact, Sev 4 - Minor Impact]
+ *                             example: "Sev 1 - Critical Impact"
+ *                           department:
+ *                             type: string
+ *                             description: Primary affected department
+ *                             enum: [Customer Support, IT Operations, Sales, Finance, Other, Human Resources]
+ *                             example: "IT Operations"
+ *                           confidence:
+ *                             type: integer
+ *                             minimum: 0
+ *                             maximum: 100
+ *                             description: Confidence level in the assessment (0-100%)
+ *                             example: 95
+ *                           reasoning:
+ *                             type: string
+ *                             description: Explanation of the assessment reasoning
+ *                             example: "Database server failure during peak business hours affects all customer transactions"
+ *                           recommendations:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                             description: Recommended actions for mitigation
+ *                             example: ["Immediate database server restart", "Implement database failover", "Notify customers of service disruption"]
  *       400:
  *         description: Bad request - missing or invalid input
  *         content:

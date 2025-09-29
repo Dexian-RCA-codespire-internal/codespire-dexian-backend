@@ -87,12 +87,7 @@ class ImpactAssessmentAgent {
       return {
         success: true,
         data: {
-          impactAssessment: parsedResponse.data.impactAssessment,
-          impactLevel: parsedResponse.data.impactLevel,
-          department: parsedResponse.data.department,
-          confidence: parsedResponse.data.confidence,
-          reasoning: parsedResponse.data.reasoning,
-          recommendations: parsedResponse.data.recommendations
+          impactAssessments: parsedResponse.data.impactAssessments
         }
       };
 
@@ -149,8 +144,11 @@ DEPARTMENTS AVAILABLE:
 ${DEPARTMENT_LIST.map((dept, index) => `${index + 1}. ${dept}`).join('\n')}
 
 ANALYSIS REQUIREMENTS:
-1. Analyze the business impact based on the problem statement and timeline
-2. Consider factors like:
+1. Generate THREE different impact assessments from different perspectives:
+   - First assessment: Focus on technical/operational impact
+   - Second assessment: Focus on business/revenue impact  
+   - Third assessment: Focus on user experience/customer impact
+2. For each assessment, consider factors like:
    - Number of users affected
    - Business function disruption
    - Revenue impact
@@ -158,28 +156,49 @@ ANALYSIS REQUIREMENTS:
    - System availability
    - Data integrity concerns
    - Security implications
-3. Determine the most appropriate impact level
-4. Identify the primary affected department
-5. Provide confidence level (0-100%)
-6. Explain your reasoning
-7. Provide recommendations for mitigation
+3. Determine the most appropriate impact level for each perspective
+4. Identify the primary affected department for each assessment
+5. Provide confidence level (0-100%) for each
+6. Explain reasoning for each assessment
+7. Provide specific recommendations for each perspective
 
 RESPONSE FORMAT (JSON):
 {
-  "impactAssessment": "Detailed assessment of the impact including business implications, user impact, and operational effects",
-  "impactLevel": "One of the available impact levels",
-  "department": "One of the available departments",
-  "confidence": 85,
-  "reasoning": "Explanation of why this impact level and department were selected",
-  "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
+  "impactAssessments": [
+    {
+      "impactAssessment": "Technical/operational impact assessment focusing on system availability and infrastructure",
+      "impactLevel": "One of the available impact levels",
+      "department": "One of the available departments",
+      "confidence": 85,
+      "reasoning": "Explanation of why this impact level and department were selected from technical perspective",
+      "recommendations": ["Technical recommendation 1", "Technical recommendation 2", "Technical recommendation 3"]
+    },
+    {
+      "impactAssessment": "Business/revenue impact assessment focusing on financial implications and business continuity",
+      "impactLevel": "One of the available impact levels", 
+      "department": "One of the available departments",
+      "confidence": 80,
+      "reasoning": "Explanation of why this impact level and department were selected from business perspective",
+      "recommendations": ["Business recommendation 1", "Business recommendation 2", "Business recommendation 3"]
+    },
+    {
+      "impactAssessment": "User experience/customer impact assessment focusing on end-user effects and customer satisfaction",
+      "impactLevel": "One of the available impact levels",
+      "department": "One of the available departments", 
+      "confidence": 90,
+      "reasoning": "Explanation of why this impact level and department were selected from user perspective",
+      "recommendations": ["User recommendation 1", "User recommendation 2", "User recommendation 3"]
+    }
+  ]
 }
 
 IMPORTANT: 
 - Respond ONLY with valid JSON
 - Use exact impact level and department names from the lists above
-- Confidence should be a number between 0-100
-- Provide specific, actionable recommendations
-- Consider both immediate and long-term impacts`;
+- Confidence should be a number between 0-100 for each assessment
+- Provide specific, actionable recommendations for each perspective
+- Consider both immediate and long-term impacts
+- Each assessment should have a different focus but be based on the same incident`;
   }
 
   /**
@@ -201,29 +220,38 @@ IMPORTANT:
       const parsed = JSON.parse(jsonMatch[0]);
       const errors = [];
 
-      // Validate required fields
-      if (!parsed.impactAssessment || typeof parsed.impactAssessment !== 'string') {
-        errors.push('impactAssessment is required and must be a string');
-      }
+      // Validate that we have impactAssessments array
+      if (!parsed.impactAssessments || !Array.isArray(parsed.impactAssessments)) {
+        errors.push('impactAssessments is required and must be an array');
+      } else if (parsed.impactAssessments.length !== 3) {
+        errors.push('impactAssessments must contain exactly 3 assessments');
+      } else {
+        // Validate each assessment in the array
+        parsed.impactAssessments.forEach((assessment, index) => {
+          if (!assessment.impactAssessment || typeof assessment.impactAssessment !== 'string') {
+            errors.push(`Assessment ${index + 1}: impactAssessment is required and must be a string`);
+          }
 
-      if (!parsed.impactLevel || !isValidImpactLevel(parsed.impactLevel)) {
-        errors.push(`impactLevel must be one of: ${IMPACT_LEVEL_LIST.join(', ')}`);
-      }
+          if (!assessment.impactLevel || !isValidImpactLevel(assessment.impactLevel)) {
+            errors.push(`Assessment ${index + 1}: impactLevel must be one of: ${IMPACT_LEVEL_LIST.join(', ')}`);
+          }
 
-      if (!parsed.department || !isValidDepartment(parsed.department)) {
-        errors.push(`department must be one of: ${DEPARTMENT_LIST.join(', ')}`);
-      }
+          if (!assessment.department || !isValidDepartment(assessment.department)) {
+            errors.push(`Assessment ${index + 1}: department must be one of: ${DEPARTMENT_LIST.join(', ')}`);
+          }
 
-      if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {
-        errors.push('confidence must be a number between 0 and 100');
-      }
+          if (typeof assessment.confidence !== 'number' || assessment.confidence < 0 || assessment.confidence > 100) {
+            errors.push(`Assessment ${index + 1}: confidence must be a number between 0 and 100`);
+          }
 
-      if (!parsed.reasoning || typeof parsed.reasoning !== 'string') {
-        errors.push('reasoning is required and must be a string');
-      }
+          if (!assessment.reasoning || typeof assessment.reasoning !== 'string') {
+            errors.push(`Assessment ${index + 1}: reasoning is required and must be a string`);
+          }
 
-      if (!Array.isArray(parsed.recommendations) || parsed.recommendations.length === 0) {
-        errors.push('recommendations must be a non-empty array');
+          if (!Array.isArray(assessment.recommendations) || assessment.recommendations.length === 0) {
+            errors.push(`Assessment ${index + 1}: recommendations must be a non-empty array`);
+          }
+        });
       }
 
       if (errors.length > 0) {
@@ -233,15 +261,20 @@ IMPORTANT:
         };
       }
 
+      // Process and clean each assessment
+      const processedAssessments = parsed.impactAssessments.map((assessment, index) => ({
+        impactAssessment: assessment.impactAssessment.trim(),
+        impactLevel: assessment.impactLevel,
+        department: assessment.department,
+        confidence: Math.round(assessment.confidence),
+        reasoning: assessment.reasoning.trim(),
+        recommendations: assessment.recommendations.map(rec => rec.trim()).filter(rec => rec.length > 0)
+      }));
+
       return {
         success: true,
         data: {
-          impactAssessment: parsed.impactAssessment.trim(),
-          impactLevel: parsed.impactLevel,
-          department: parsed.department,
-          confidence: Math.round(parsed.confidence),
-          reasoning: parsed.reasoning.trim(),
-          recommendations: parsed.recommendations.map(rec => rec.trim()).filter(rec => rec.length > 0)
+          impactAssessments: processedAssessments
         }
       };
 
@@ -292,21 +325,50 @@ IMPORTANT:
       department = DEPARTMENTS.HUMAN_RESOURCES;
     }
     
-    return {
-      success: true,
-      data: {
-        impactAssessment: `Based on keyword analysis: ${problemStatement}. This appears to be a ${impactLevel.toLowerCase()} issue affecting ${department.toLowerCase()}.`,
+    // Generate 3 different fallback assessments
+    const fallbackAssessments = [
+      {
+        impactAssessment: `Technical Impact: Based on keyword analysis, this appears to be a ${impactLevel.toLowerCase()} technical issue affecting ${department.toLowerCase()}. System infrastructure and operational capabilities are impacted.`,
         impactLevel: impactLevel,
-        department: department,
+        department: DEPARTMENTS.IT_OPERATIONS,
         confidence: confidence,
-        reasoning: `Fallback assessment based on keyword analysis due to API quota limitations. Analyzed problem statement and timeline context for key indicators.`,
+        reasoning: `Fallback technical assessment based on keyword analysis due to API quota limitations. Focused on system availability and infrastructure impact.`,
         recommendations: [
           "Contact API provider to increase quota limits",
           "Implement proper monitoring and alerting",
-          "Consider upgrading to paid API plan for production use",
-          "Review incident response procedures",
+          "Review system architecture for single points of failure"
+        ]
+      },
+      {
+        impactAssessment: `Business Impact: This ${impactLevel.toLowerCase()} issue affects business operations and revenue generation. Customer transactions and business processes are disrupted.`,
+        impactLevel: impactLevel,
+        department: department,
+        confidence: confidence - 5,
+        reasoning: `Fallback business assessment based on keyword analysis due to API quota limitations. Focused on revenue and business continuity impact.`,
+        recommendations: [
+          "Assess revenue impact and customer satisfaction",
+          "Implement business continuity planning",
+          "Consider upgrading to paid API plan for production use"
+        ]
+      },
+      {
+        impactAssessment: `User Experience Impact: This issue significantly affects end-user experience and customer satisfaction. Users are experiencing service disruptions and degraded performance.`,
+        impactLevel: impactLevel,
+        department: DEPARTMENTS.CUSTOMER_SUPPORT,
+        confidence: confidence - 10,
+        reasoning: `Fallback user experience assessment based on keyword analysis due to API quota limitations. Focused on customer impact and user satisfaction.`,
+        recommendations: [
+          "Monitor customer feedback and support tickets",
+          "Implement user communication strategies",
           "Document lessons learned for future incidents"
         ]
+      }
+    ];
+    
+    return {
+      success: true,
+      data: {
+        impactAssessments: fallbackAssessments
       }
     };
   }
