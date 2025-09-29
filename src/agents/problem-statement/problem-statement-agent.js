@@ -13,6 +13,7 @@ const {
     SEVERITY_LEVEL_LIST,
     BUSINESS_IMPACT_CATEGORY_LIST
 } = require('../../constants/servicenow');
+const { ConnectContactLens } = require('aws-sdk');
 
 class ProblemStatementAgent {
     constructor() {
@@ -306,6 +307,9 @@ Focus on:
      * Fix common JSON issues in LLM responses
      */
     fixCommonJSONIssues(jsonString) {
+        // Remove control characters that cause JSON parsing issues FIRST
+        jsonString = jsonString.replace(/[\x00-\x1F\x7F]/g, '');
+        
         // Remove any trailing commas before closing brackets/braces
         jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
         
@@ -323,6 +327,9 @@ Focus on:
         jsonString = jsonString.replace(/:\s*false\b/g, ': false');
         jsonString = jsonString.replace(/:\s*null\b/g, ': null');
         
+        // Clean up any remaining control characters
+        jsonString = jsonString.replace(/[\x00-\x1F\x7F]/g, '');
+        
         return jsonString;
     }
 
@@ -334,21 +341,13 @@ Focus on:
             console.log('🔄 Attempting fallback JSON parsing...');
             
             // Try to extract just the essential parts and reconstruct
-            const problemDefsMatch = response.match(/problemDefinitions[^[]*\[([^\]]+)\]/);
-            const questionMatch = response.match(/question[^"]*"([^"]+)"/);
-            const issueTypeMatch = response.match(/issueType[^"]*"([^"]+)"/);
-            const severityMatch = response.match(/severity[^"]*"([^"]+)"/);
-            const businessImpactMatch = response.match(/businessImpact[^"]*"([^"]+)"/);
-            const confidenceMatch = response.match(/confidence[^"]*(\d+\.?\d*)/);
+            const problemDefsMatch = response.match(/"problemDefinitions"\s*:\s*\[(.*?)\]/s);
+            const questionMatch = response.match(/"question"\s*:\s*"([^"]+)"/);
+            const issueTypeMatch = response.match(/"issueType"\s*:\s*"([^"]+)"/);
+            const severityMatch = response.match(/"severity"\s*:\s*"([^"]+)"/);
+            const businessImpactMatch = response.match(/"businessImpact"\s*:\s*"([^"]+)"/);
+            const confidenceMatch = response.match(/"confidence"\s*:\s*(\d+\.?\d*)/);
             
-            console.log('🔍 Extracted matches:', {
-                problemDefs: !!problemDefsMatch,
-                question: !!questionMatch,
-                issueType: !!issueTypeMatch,
-                severity: !!severityMatch,
-                businessImpact: !!businessImpactMatch,
-                confidence: !!confidenceMatch
-            });
             
             if (!problemDefsMatch || !questionMatch || !issueTypeMatch || !severityMatch || !businessImpactMatch) {
                 console.log('❌ Missing required fields for fallback parsing');
@@ -357,13 +356,18 @@ Focus on:
             
             // Extract problem definitions with better parsing
             const problemDefsString = problemDefsMatch[1];
-            const problemDefs = problemDefsString.split(',').map(def => 
-                def.trim().replace(/^["']|["']$/g, '').replace(/\\"/g, '"')
-            ).filter(def => def.length > 0);
+            // Split by quotes and commas more intelligently
+            const problemDefs = problemDefsString.match(/"([^"]+)"/g)?.map(def => 
+                def.replace(/"/g, '').trim()
+            ).filter(def => def.length > 0) || [];
             
-            // If we don't have exactly 3, pad with defaults
-            while (problemDefs.length < 3) {
-                problemDefs.push(`Technical issue affecting system performance`);
+            // Ensure we have exactly 3 problem definitions
+            if (problemDefs.length > 3) {
+                problemDefs.splice(3);
+            } else if (problemDefs.length < 3) {
+                while (problemDefs.length < 3) {
+                    problemDefs.push(`Technical issue affecting system performance`);
+                }
             }
             
             const reconstructed = {
@@ -375,7 +379,6 @@ Focus on:
                 confidence: confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.8
             };
             
-            console.log('🔧 Reconstructed response:', reconstructed);
             
             // Validate the reconstructed response
             const validation = this.validateLLMResponse(reconstructed);
