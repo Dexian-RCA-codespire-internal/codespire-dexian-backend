@@ -21,6 +21,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
+const { slaMonitoringService } = require('./services/slaMonitoringService');
 const config = require('./config');
 
 
@@ -38,8 +39,10 @@ app.use(cors({
     process.env.FRONTEND_URL || 'http://localhost:3001',
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version', 'x-socket-id'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
   optionsSuccessStatus: 200
@@ -78,7 +81,7 @@ app.use((req, res, next) => {
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *               uptime: 3600
  */
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -111,6 +114,9 @@ app.get('/debug/polling', async (req, res) => {
 // Setup Swagger documentation
 const { setupSwagger } = require('./swagger');
 setupSwagger(app, PORT);
+
+// Serve static email assets
+app.use('/email-assets', express.static('public/email-assets'));
 
 // API routes
 app.use('/api/v1', require('./routes'));
@@ -325,6 +331,15 @@ server.listen(PORT, async () => {
     }
   } else {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
+  }
+
+  // Initialize SLA Monitoring Service
+  try {
+    console.log('🚀 Initializing SLA monitoring service...');
+    await slaMonitoringService.initialize();
+    console.log('✅ SLA monitoring service initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize SLA monitoring service:', error);
   }
 });
 
