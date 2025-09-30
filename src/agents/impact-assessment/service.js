@@ -29,9 +29,13 @@ class ImpactAssessmentService {
 
       if (result.success) {
         console.log('✅ Impact assessment completed successfully');
-        console.log('📊 Impact Level:', result.data.impactLevel);
-        console.log('🏢 Department:', result.data.department);
-        console.log('🎯 Confidence:', result.data.confidence + '%');
+        console.log('📊 Number of Assessments:', result.data.impactAssessments.length);
+        result.data.impactAssessments.forEach((assessment, index) => {
+          console.log(`📋 Assessment ${index + 1}:`);
+          console.log(`   Impact Level: ${assessment.impactLevel}`);
+          console.log(`   Department: ${assessment.department}`);
+          console.log(`   Confidence: ${assessment.confidence}%`);
+        });
       } else {
         console.error('❌ Impact assessment failed:', result.error);
       }

@@ -56,7 +56,9 @@ class ImpactAssessmentController {
         res.json({
           success: true,
           message: 'Impact assessment completed successfully',
-          data: result.data
+          data: {
+            impactAssessments: result.data.impactAssessments
+          }
         });
       } else {
         res.status(500).json({
