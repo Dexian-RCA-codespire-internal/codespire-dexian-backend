@@ -223,6 +223,15 @@ userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
 };
 
 userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
+  console.log('User.createUser called with:', {
+    supertokensUserId,
+    email: email.toLowerCase(),
+    name,
+    firstName,
+    lastName,
+    phone
+  });
+  
   const user = new this({
     supertokensUserId,
     email: email.toLowerCase(),
@@ -232,7 +241,12 @@ userSchema.statics.createUser = async function(supertokensUserId, email, name, f
     phone
   });
   
-  return await user.save();
+  console.log('User document created:', user);
+  
+  const savedUser = await user.save();
+  console.log('User saved successfully:', savedUser._id);
+  
+  return savedUser;
 };
 
 userSchema.statics.findByRole = function(role) {

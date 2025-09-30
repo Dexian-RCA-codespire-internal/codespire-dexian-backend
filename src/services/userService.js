@@ -1,5 +1,10 @@
 // new file servicenow
 const User = require('../models/User');
+const { signUp } = require('supertokens-node/recipe/emailpassword');
+const UserMetadata = require('supertokens-node/recipe/usermetadata');
+const supertokens = require('supertokens-node');
+const SuperTokensOTPService = require('./supertokensOTPService');
+const emailService = require('./emailService');
 
 // Configuration constants
 const DEFAULT_LIMIT = 10;
@@ -307,13 +312,14 @@ async function updateUserRoles(userId, roles) {
 }
 
 /**
- * Delete user
- * @param {String} userId - User ID
+ * Delete user from both SuperTokens and MongoDB
+ * @param {String} userId - MongoDB User ID
  * @returns {Object} Delete result
  */
 async function deleteUser(userId) {
     try {
-      const user = await User.findByIdAndDelete(userId);
+      // First get the user to find SuperTokens ID
+      const user = await User.findById(userId);
 
       if (!user) {
         return {
@@ -322,9 +328,23 @@ async function deleteUser(userId) {
         };
       }
 
+      const supertokensUserId = user.supertokensUserId;
+
+      // Delete from SuperTokens first
+      try {
+        await supertokens.deleteUser(supertokensUserId);
+        console.log('✅ User deleted from SuperTokens:', supertokensUserId);
+      } catch (stError) {
+        console.error('❌ Error deleting user from SuperTokens:', stError);
+        // Continue with MongoDB deletion even if SuperTokens fails
+      }
+
+      // Delete from MongoDB
+      await User.findByIdAndDelete(userId);
+
       return {
         success: true,
-        message: 'User deleted successfully'
+        message: 'User deleted successfully from SuperTokens and MongoDB'
       };
 
     } catch (error) {
@@ -337,15 +357,23 @@ async function deleteUser(userId) {
 }
 
 /**
- * Create new user
+ * Create new user with SuperTokens integration (following registration flow)
  * @param {Object} userData - User data
  * @returns {Object} Create result
  */
 async function createUser(userData) {
     try {
-      const { email, name, firstName, lastName, phone, roles = ['user'], status = 'active' } = userData;
+      const { email, password, firstName, lastName, phone } = userData;
 
-      // Check if user already exists
+      // Validate required fields
+      if (!email || !password) {
+        return {
+          success: false,
+          error: 'Email and password are required'
+        };
+      }
+
+      // Check if user already exists in MongoDB
       const existingUser = await User.findOne({ email: email.toLowerCase() });
       if (existingUser) {
         return {
@@ -354,28 +382,99 @@ async function createUser(userData) {
         };
       }
 
-      // Generate a mock supertokensUserId for now
-      // In production, this should be handled by SuperTokens
-      const supertokensUserId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate full name from firstName and lastName
+      const fullName = (firstName && lastName) ? `${firstName.trim()} ${lastName.trim()}`.trim() :
+                      firstName ? firstName.trim() :
+                      lastName ? lastName.trim() :
+                      email;
 
-      const user = new User({
-        supertokensUserId,
-        email: email.toLowerCase(),
-        name,
-        firstName,
-        lastName,
-        phone,
-        roles,
-        status
-      });
+      // Create user in SuperTokens first (same as registration flow)
+      const superTokensResponse = await signUp('public', email.toLowerCase(), password);
+      
+      if (superTokensResponse.status !== 'OK') {
+        return {
+          success: false,
+          error: 'Failed to create user in SuperTokens: ' + superTokensResponse.status
+        };
+      }
 
-      await user.save();
+      const supertokensUserId = superTokensResponse.user.id;
 
-      return {
-        success: true,
-        data: user,
-        message: 'User created successfully'
-      };
+      // Store user metadata in SuperTokens (same as registration flow)
+      const userMetadata = { name: fullName };
+      if (firstName) userMetadata.firstName = firstName;
+      if (lastName) userMetadata.lastName = lastName;
+      if (phone) userMetadata.phone = phone;
+
+      await UserMetadata.updateUserMetadata(supertokensUserId, userMetadata);
+
+      // Create user in MongoDB with SuperTokens ID (same as registration flow)
+      try {
+        console.log('Creating user in MongoDB with data:', {
+          supertokensUserId,
+          email: email.toLowerCase(),
+          fullName,
+          firstName,
+          lastName,
+          phone
+        });
+        
+        const user = await User.createUser(
+          supertokensUserId,
+          email.toLowerCase(),
+          fullName,
+          firstName,
+          lastName,
+          phone
+        );
+        
+        console.log('✅ User created successfully in MongoDB:', user._id);
+        
+        // Send OTP for email verification using the user object directly
+        let otpData = null;
+        try {
+          console.log('Sending OTP for email verification to:', email);
+          
+          // Generate OTP and send using the user object we just created
+          const otp = user.generateOTP();
+          await user.save();
+          
+          // Send OTP email using custom email service
+          const emailResult = await emailService.sendOTPEmail(user.email, user.name, otp);
+          
+          if (emailResult.success) {
+            otpData = {
+              deviceId: 'custom-otp',
+              preAuthSessionId: user.supertokensUserId
+            };
+            console.log('✅ OTP sent successfully');
+          } else {
+            console.error('❌ Failed to send OTP:', emailResult.error);
+            // Don't fail user creation if OTP fails, but log it
+          }
+        } catch (otpError) {
+          console.error('❌ Error sending OTP:', otpError);
+          // Don't fail user creation if OTP fails, but log it
+        }
+        
+        return {
+          success: true,
+          data: user,
+          message: otpData 
+            ? 'User created successfully and verification OTP sent'
+            : 'User created successfully (verification OTP could not be sent)',
+          otpData: otpData // Include OTP data for frontend if needed
+        };
+      } catch (mongoError) {
+        console.error('❌ Error creating user in MongoDB:', mongoError);
+        
+        // Return partial success - user exists in SuperTokens but not in MongoDB
+        return {
+          success: false,
+          error: `User created in SuperTokens but failed to create in MongoDB: ${mongoError.message}`,
+          supertokensUserId: supertokensUserId
+        };
+      }
 
     } catch (error) {
       console.error('Error creating user:', error);

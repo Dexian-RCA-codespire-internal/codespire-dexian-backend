@@ -10,6 +10,7 @@ const {
 } = require('../services/userService');
 const { webSocketService } = require('../services/websocketService');
 const { validationResult } = require('express-validator');
+const SuperTokensOTPService = require('../services/supertokensOTPService');
 
 /**
  * Get paginated users with filtering
@@ -297,7 +298,7 @@ async function deleteUserController(req, res) {
 }
 
 /**
- * Create new user
+ * Create new user (following registration flow)
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -313,16 +314,14 @@ async function createUserController(req, res) {
         });
       }
 
-      const { email, name, firstName, lastName, phone, roles, status } = req.body;
+      const { email, password, firstName, lastName, phone } = req.body;
 
       const result = await createUser({
         email,
-        name,
+        password,
         firstName,
         lastName,
-        phone,
-        roles,
-        status
+        phone
       });
 
       if (result.success) {
@@ -398,6 +397,134 @@ async function getUserPermissionsController(req, res) {
     }
 }
 
+/**
+ * Send OTP to user email for verification
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function sendUserOTPController(req, res) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+
+    // Use SuperTokensOTPService to send OTP
+    const result = await SuperTokensOTPService.sendOTP(email);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        deviceId: result.deviceId,
+        preAuthSessionId: result.preAuthSessionId
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+}
+
+/**
+ * Verify OTP code for user email verification
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function verifyUserOTPController(req, res) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, otp, deviceId, preAuthSessionId } = req.body;
+
+    // Use SuperTokensOTPService to verify OTP
+    const result = await SuperTokensOTPService.verifyOTP(email, otp, deviceId, preAuthSessionId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        user: result.user
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+}
+
+/**
+ * Resend OTP code to user email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function resendUserOTPController(req, res) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, deviceId, preAuthSessionId } = req.body;
+
+    // Use SuperTokensOTPService to resend OTP
+    const result = await SuperTokensOTPService.resendOTP(email, deviceId, preAuthSessionId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        deviceId: result.deviceId,
+        preAuthSessionId: result.preAuthSessionId
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+}
+
 module.exports = {
   getUsers,
   getUserStatsController,
@@ -406,5 +533,8 @@ module.exports = {
   updateUserRolesController,
   deleteUserController,
   createUserController,
-  getUserPermissionsController
+  getUserPermissionsController,
+  sendUserOTPController,
+  verifyUserOTPController,
+  resendUserOTPController
 };

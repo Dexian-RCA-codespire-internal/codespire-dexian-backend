@@ -114,6 +114,26 @@ class SuperTokensOTPService {
       user.otpExpiry = null;
       await user.save();
 
+      // Also mark email as verified in SuperTokens EmailVerification
+      try {
+        const EmailVerification = require('supertokens-node/recipe/emailverification');
+        const supertokens = require('supertokens-node');
+        
+        const recipeUserId = new supertokens.RecipeUserId(user.supertokensUserId);
+        const tokenRes = await EmailVerification.createEmailVerificationToken(
+          "public",
+          recipeUserId,
+          user.email
+        );
+        if (tokenRes.status === "OK") {
+          await EmailVerification.verifyEmailUsingToken("public", tokenRes.token);
+          console.log('✅ Email marked as verified in SuperTokens EmailVerification');
+        }
+      } catch (e) {
+        console.error('❌ Failed to mark email verified in SuperTokens EmailVerification:', e);
+        // Don't fail the OTP verification if SuperTokens update fails
+      }
+
       return {
         success: true,
         message: 'OTP verified successfully',

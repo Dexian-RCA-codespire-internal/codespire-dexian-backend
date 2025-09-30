@@ -130,14 +130,19 @@ const login = async (req, res) => {
         return res.status(401).json({ error: 'User not found in database' });
       }
 
-      // Note: Email verification is optional - users can login without verification
-      // We'll use the local database verification status
-
       // Check if user is active
       if (user.status !== 'active') {
         return res.status(403).json({ 
           error: 'Account suspended',
           message: 'Your account has been suspended. Please contact support.'
+        });
+      }
+
+      // Check if email is verified (for users created through user management)
+      if (!user.isEmailVerified) {
+        return res.status(403).json({
+          error: 'Email not verified',
+          message: 'Please verify your email address before logging in. Check your email for verification instructions.'
         });
       }
 
@@ -870,6 +875,7 @@ const resetPasswordWithToken = async (req, res) => {
       
       // Get the user from SuperTokens to find the email-password recipe user id
       const u = await supertokens.getUser(user.supertokensUserId);
+      console.log('User from SuperTokens:', u);
       if (!u) {
         return res.status(400).json({
           success: false,

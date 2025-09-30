@@ -9,7 +9,10 @@ const {
   updateUserRolesController,
   deleteUserController,
   createUserController,
-  getUserPermissionsController
+  getUserPermissionsController,
+  sendUserOTPController,
+  verifyUserOTPController,
+  resendUserOTPController
 } = require('../controllers/userController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -21,10 +24,9 @@ const createUserValidation = [
     .isEmail()
     .normalizeEmail()
     .withMessage('Valid email is required'),
-  body('name')
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Name must be between 2 and 100 characters'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
   body('firstName')
     .optional()
     .trim()
@@ -39,15 +41,7 @@ const createUserValidation = [
     .optional()
     .trim()
     .isLength({ max: 20 })
-    .withMessage('Phone must be less than 20 characters'),
-  body('roles')
-    .optional()
-    .isArray()
-    .withMessage('Roles must be an array'),
-  body('status')
-    .optional()
-    .isIn(['active', 'inactive', 'suspended'])
-    .withMessage('Status must be active, inactive, or suspended')
+    .withMessage('Phone must be less than 20 characters')
 ];
 
 const updateStatusValidation = [
@@ -63,6 +57,48 @@ const updateRolesValidation = [
   body('roles.*')
     .isIn(['user', 'admin'])
     .withMessage('Each role must be either user or admin')
+];
+
+// OTP validation rules
+const sendOTPValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email is required')
+];
+
+const verifyOTPValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email is required'),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .isNumeric()
+    .withMessage('OTP must be a 6-digit number'),
+  body('deviceId')
+    .optional()
+    .isString()
+    .withMessage('Device ID must be a string'),
+  body('preAuthSessionId')
+    .optional()
+    .isString()
+    .withMessage('Pre-auth session ID must be a string')
+];
+
+const resendOTPValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email is required'),
+  body('deviceId')
+    .optional()
+    .isString()
+    .withMessage('Device ID must be a string'),
+  body('preAuthSessionId')
+    .optional()
+    .isString()
+    .withMessage('Pre-auth session ID must be a string')
 ];
 
 // Routes
@@ -228,7 +264,7 @@ router.get('/:userId', authenticateToken, getUserByIdController);
  * @swagger
  * /api/v1/users:
  *   post:
- *     summary: Create new user
+ *     summary: Create new user (following registration flow)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -240,15 +276,14 @@ router.get('/:userId', authenticateToken, getUserByIdController);
  *             type: object
  *             required:
  *               - email
- *               - name
+ *               - password
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
- *               name:
+ *               password:
  *                 type: string
- *                 minLength: 2
- *                 maxLength: 100
+ *                 minLength: 6
  *               firstName:
  *                 type: string
  *                 maxLength: 50
@@ -258,14 +293,6 @@ router.get('/:userId', authenticateToken, getUserByIdController);
  *               phone:
  *                 type: string
  *                 maxLength: 20
- *               roles:
- *                 type: array
- *                 items:
- *                   type: string
- *                   enum: [user, admin]
- *               status:
- *                 type: string
- *                 enum: [active, inactive, suspended]
  *     responses:
  *       201:
  *         description: User created successfully
@@ -464,5 +491,169 @@ router.get('/:userId/permissions', authenticateToken, getUserPermissionsControll
  *         description: Internal server error
  */
 router.delete('/:userId', authenticateToken, deleteUserController);
+
+// OTP Verification Routes
+
+/**
+ * @swagger
+ * /api/v1/users/send-otp:
+ *   post:
+ *     summary: Send OTP to user email for verification
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deviceId:
+ *                   type: string
+ *                 preAuthSessionId:
+ *                   type: string
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/send-otp', authenticateToken, sendOTPValidation, sendUserOTPController);
+
+/**
+ * @swagger
+ * /api/v1/users/verify-otp:
+ *   post:
+ *     summary: Verify OTP code for user email verification
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               otp:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 example: "123456"
+ *               deviceId:
+ *                 type: string
+ *                 example: "device_123456"
+ *               preAuthSessionId:
+ *                 type: string
+ *                 example: "session_789012"
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     isEmailVerified:
+ *                       type: boolean
+ *       400:
+ *         description: Invalid OTP or request
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/verify-otp', authenticateToken, verifyOTPValidation, verifyUserOTPController);
+
+/**
+ * @swagger
+ * /api/v1/users/resend-otp:
+ *   post:
+ *     summary: Resend OTP code to user email
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               deviceId:
+ *                 type: string
+ *                 example: "device_123456"
+ *               preAuthSessionId:
+ *                 type: string
+ *                 example: "session_789012"
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deviceId:
+ *                   type: string
+ *                 preAuthSessionId:
+ *                   type: string
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/resend-otp', authenticateToken, resendOTPValidation, resendUserOTPController);
 
 module.exports = router;
