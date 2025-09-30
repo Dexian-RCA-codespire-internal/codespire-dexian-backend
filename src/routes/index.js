@@ -14,6 +14,7 @@ const notificationsRoutes = require('./notifications');
 const slaRoutes = require('./sla');
 const slaMonitoringRoutes = require('./slaMonitoring');
 const rbacRoutes = require('./rbac');
+const usersRoutes = require('./users');
 
 const playbookRoutes = require('./playbooks');
 
@@ -31,6 +32,7 @@ router.use('/notifications', notificationsRoutes);
 router.use('/sla', slaRoutes);
 router.use('/sla/monitoring', slaMonitoringRoutes);
 router.use('/rbac', rbacRoutes);
+router.use('/users', usersRoutes);
 
 // Default route
 router.get('/', (req, res) => {
@@ -50,7 +52,8 @@ router.get('/', (req, res) => {
       chat: '/chat',
       notifications: '/notifications',
       playbooks: '/playbooks',
-      rbac: '/rbac'
+      rbac: '/rbac',
+      users: '/users'
     },
     documentation: {
       swagger: '/api/docs',

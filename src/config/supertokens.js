@@ -226,10 +226,10 @@ const initSuperTokens = () => {
                       console.error('Error sending OTP during SuperTokens signup:', otpError);
                     }
 
-                    // Assign default 'user' role
+                    // Temporary : A flow to assign roles to users during signup, change values between existing roles [user/admin]
                     try {
                       const RBACService = require('../services/rbacService');
-                      const roleResult = await RBACService.assignRoleToUser(response.user.id, 'admin');
+                      const roleResult = await RBACService.assignRoleToUser(response.user.id, 'user');
                       if (roleResult.success) {
                         console.log('✅ Default user role assigned during signup');
                       } else {

@@ -1,6 +1,10 @@
 // new file servicenow
 const { Server } = require('socket.io');
 const { fetchTicketsFromDB, getTicketStats } = require('./ticketsService');
+const { 
+  fetchUsersFromDB, 
+  getUserStats 
+} = require('./userService');
 
 class WebSocketService {
   constructor() {
@@ -78,6 +82,16 @@ class WebSocketService {
       // Handle incremental sync requests
       socket.on('request_incremental_sync', (options) => {
         this.handleIncrementalSync(socket, options);
+      });
+
+      // Handle user data requests
+      socket.on('request_user_data', (options) => {
+        this.handleUserDataRequest(socket, options);
+      });
+
+      // Handle user statistics requests
+      socket.on('request_user_statistics', (options) => {
+        this.handleUserStatisticsRequest(socket, options);
       });
     });
   }
@@ -477,6 +491,147 @@ class WebSocketService {
       
       socket.emit('sync_error', {
         message: `Incremental sync failed: ${error.message}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Emit user update to all connected clients
+   * @param {Object} userData - The user data to broadcast
+   * @param {String} eventType - Type of event (user_created, user_updated, user_deleted)
+   */
+  emitUserUpdate(userData, eventType = 'user_update') {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    const eventData = {
+      type: eventType,
+      user: userData,
+      timestamp: new Date().toISOString()
+    };
+
+    // Emit to all connected clients
+    this.io.emit('user_update', eventData);
+    
+    // Also emit to specific room for users
+    this.io.to('users').emit('user_update', eventData);
+    
+    console.log(`📡 Emitted ${eventType} to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit new user to all connected clients
+   * @param {Object} userData - The new user data
+   */
+  emitNewUser(userData) {
+    this.emitUserUpdate(userData, 'user_created');
+  }
+
+  /**
+   * Emit updated user to all connected clients
+   * @param {Object} userData - The updated user data
+   */
+  emitUpdatedUser(userData) {
+    this.emitUserUpdate(userData, 'user_updated');
+  }
+
+  /**
+   * Emit deleted user to all connected clients
+   * @param {Object} userData - The deleted user data
+   */
+  emitDeletedUser(userData) {
+    this.emitUserUpdate(userData, 'user_deleted');
+  }
+
+  /**
+   * Handle user data request
+   * @param {Object} socket - Socket instance
+   * @param {Object} options - Request options
+   */
+  async handleUserDataRequest(socket, options = {}) {
+    const clientId = socket.id;
+    try {
+      console.log(`👥 Handling user data request for client ${clientId}`);
+      
+      const { 
+        page = 1, 
+        limit = 10, 
+        query = '', 
+        role = '', 
+        status = '', 
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = options;
+
+      const result = await fetchUsersFromDB({
+        page: parseInt(page),
+        limit: parseInt(limit),
+        query,
+        role,
+        status,
+        sortBy,
+        sortOrder
+      });
+
+      if (result.success) {
+        socket.emit('user_data_response', {
+          success: true,
+          data: result.data,
+          pagination: result.pagination,
+          timestamp: new Date().toISOString()
+        });
+        console.log(`✅ Sent user data to client ${clientId}: ${result.data.length} users (page ${page})`);
+      } else {
+        throw new Error(result.error || 'Failed to fetch user data');
+      }
+    } catch (error) {
+      console.error(`❌ User data request failed for client ${clientId}:`, error.message);
+      socket.emit('user_data_error', {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Handle user statistics request
+   * @param {Object} socket - Socket instance
+   * @param {Object} options - Request options
+   */
+  async handleUserStatisticsRequest(socket, options = {}) {
+    const clientId = socket.id;
+    try {
+      console.log(`📊 Handling user statistics request for client ${clientId}`);
+      
+      const { role = '', status = '' } = options;
+      const result = await getUserStats({ role, status });
+
+      if (result.success) {
+        socket.emit('user_statistics_response', {
+          success: true,
+          data: result.data,
+          timestamp: new Date().toISOString()
+        });
+        console.log(`✅ Sent user statistics to client ${clientId}`);
+      } else {
+        throw new Error(result.error || 'Failed to fetch user statistics');
+      }
+    } catch (error) {
+      console.error(`❌ User statistics request failed for client ${clientId}:`, error.message);
+      socket.emit('user_statistics_error', {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Also emit a notification about the error
+      socket.emit('notification', {
+        message: `User statistics error: ${error.message}`,
+        notificationType: 'error',
         timestamp: new Date().toISOString()
       });
     }
