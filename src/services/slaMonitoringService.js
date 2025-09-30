@@ -146,15 +146,6 @@ class SLAMonitoringService {
       
       console.log(`✅ SLA monitoring check completed: ${processedCount}/${openSLAs.length} processed, ${notificationsSent} notifications sent`);
       
-      // Emit monitoring status via WebSocket only if initialized
-      // try {
-      //   webSocketService.emitNotification(
-      //     `SLA monitoring completed: ${processedCount} tickets checked, ${notificationsSent} notifications sent`,
-      //     'info'
-      //   );
-      // } catch (wsError) {
-      //   console.warn('⚠️ Could not emit WebSocket notification:', wsError.message);
-      // }
       
     } catch (error) {
       console.error('❌ Error in SLA monitoring check:', error);
