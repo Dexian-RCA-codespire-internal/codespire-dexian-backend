@@ -147,14 +147,14 @@ class SLAMonitoringService {
       console.log(`✅ SLA monitoring check completed: ${processedCount}/${openSLAs.length} processed, ${notificationsSent} notifications sent`);
       
       // Emit monitoring status via WebSocket only if initialized
-      try {
-        webSocketService.emitNotification(
-          `SLA monitoring completed: ${processedCount} tickets checked, ${notificationsSent} notifications sent`,
-          'info'
-        );
-      } catch (wsError) {
-        console.warn('⚠️ Could not emit WebSocket notification:', wsError.message);
-      }
+      // try {
+      //   webSocketService.emitNotification(
+      //     `SLA monitoring completed: ${processedCount} tickets checked, ${notificationsSent} notifications sent`,
+      //     'info'
+      //   );
+      // } catch (wsError) {
+      //   console.warn('⚠️ Could not emit WebSocket notification:', wsError.message);
+      // }
       
     } catch (error) {
       console.error('❌ Error in SLA monitoring check:', error);
@@ -401,19 +401,19 @@ class SLAMonitoringService {
       switch (status) {
         case 'warning':
           notificationType = 'warning';
-          title = '⚠️ SLA Warning';
+          title = 'SLA Warning';
           message = `Ticket ${sla.ticket_id} (${sla.priority}) has reached SLA warning phase - ${percentage}% time elapsed, ${timeLeft} remaining`;
           break;
           
         case 'critical':
           notificationType = 'error'; // Use error for critical to make it more prominent
-          title = '🚨 SLA Critical';
+          title = 'SLA Critical';
           message = `Ticket ${sla.ticket_id} (${sla.priority}) is in SLA critical phase - ${percentage}% time elapsed, ${timeLeft} remaining`;
           break;
           
         case 'breached':
           notificationType = 'error';
-          title = '💥 SLA Breached';
+          title = 'SLA Breached';
           message = `Ticket ${sla.ticket_id} (${sla.priority}) has breached SLA - ${timeLeft}`;
           break;
           
