@@ -118,7 +118,68 @@ router.get('/profile', getUserRole, userController.getUserProfile);
  *       500:
  *         description: Internal server error
  */
-router.get('/verify-session', userController.verifySession);
+router.get('/verify-session', getUserRole, userController.verifySession);
+
+/**
+ * @swagger
+ * /api/v1/users/session/status:
+ *   get:
+ *     summary: Check session status
+ *     description: Lightweight endpoint to check if the current session is valid. Returns 200 if valid, 401 if revoked/expired.
+ *     tags: [Users]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Session is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     isValid:
+ *                       type: boolean
+ *                       example: true
+ *                     sessionHandle:
+ *                       type: string
+ *                     userId:
+ *                       type: string
+ *                     sessionInfo:
+ *                       type: object
+ *                       properties:
+ *                         timeCreated:
+ *                           type: number
+ *                         expiry:
+ *                           type: number
+ *       401:
+ *         description: Session is invalid, revoked, or expired
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Session not found"
+ *                 message:
+ *                   type: string
+ *                   example: "Session has been revoked or expired"
+ *                 sessionRevoked:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/session/status', getUserRole, userController.checkSessionStatus);
 
 /**
  * @swagger
@@ -587,5 +648,183 @@ router.put('/:userId/role', requireAdmin, userController.updateUserRole);
  *         description: Internal server error
  */
 router.delete('/sessions/:sessionHandle', requireAdmin, userController.revokeUserSession);
+
+/**
+ * @swagger
+ * /api/v1/users/{userId}/sessions:
+ *   get:
+ *     summary: Get user active sessions (Admin only)
+ *     description: Get all active sessions for a specific user
+ *     tags: [Users]
+ *     security:
+ *       - sessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SuperTokens user ID
+ *     responses:
+ *       200:
+ *         description: User sessions retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     activeSessions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     sessionCount:
+ *                       type: integer
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ *   delete:
+ *     summary: Revoke all user sessions (Admin only)
+ *     description: Revoke all active sessions for a specific user
+ *     tags: [Users]
+ *     security:
+ *       - sessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: SuperTokens user ID
+ *     responses:
+ *       200:
+ *         description: All user sessions revoked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     revokedSessionsCount:
+ *                       type: integer
+ *                     revokedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Bad request - Cannot revoke own sessions
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/:userId/sessions', requireAdmin, userController.getUserActiveSessions);
+router.delete('/:userId/sessions', requireAdmin, userController.revokeAllUserSessions);
+
+/**
+ * @swagger
+ * /api/v1/users/session/refresh:
+ *   post:
+ *     summary: Refresh current user session
+ *     description: Refresh the current user's session and update user data
+ *     tags: [Users]
+ *     security:
+ *       - sessionAuth: []
+ *     responses:
+ *       200:
+ *         description: Session refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     sessionHandle:
+ *                       type: string
+ *                     refreshedAt:
+ *                       type: string
+ *                       format: date-time
+ *                     userData:
+ *                       type: object
+ *       400:
+ *         description: Bad request - Session refresh failed
+ *       401:
+ *         description: Unauthorized - Invalid session
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/session/refresh', getUserRole, userController.refreshUserSession);
+
+/**
+ * @swagger
+ * /api/v1/users/session/info:
+ *   get:
+ *     summary: Get current session information
+ *     description: Get detailed information about the current user's session
+ *     tags: [Users]
+ *     security:
+ *       - sessionAuth: []
+ *     responses:
+ *       200:
+ *         description: Session information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     session:
+ *                       type: object
+ *                       properties:
+ *                         sessionHandle:
+ *                           type: string
+ *                         userId:
+ *                           type: string
+ *                         accessTokenPayload:
+ *                           type: object
+ *                     user:
+ *                       type: object
+ *                     mongoUser:
+ *                       type: object
+ *       401:
+ *         description: Unauthorized - Invalid session
+ *       404:
+ *         description: Session not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/session/info', getUserRole, userController.getCurrentSessionInfo);
+router.get('/session/active', getUserRole, userController.getCurrentUserActiveSessions);
+router.post('/session/sync', getUserRole, userController.syncUserSessions);
 
 module.exports = router;

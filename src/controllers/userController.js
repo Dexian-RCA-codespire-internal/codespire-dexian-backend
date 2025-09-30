@@ -1,4 +1,6 @@
 const SuperTokensUserService = require('../services/supertokensUserService');
+const SessionService = require('../services/sessionService');
+const SessionUtils = require('../utils/sessionUtils');
 const { requireAdmin, getUserRole } = require('../middleware/roleAuth');
 
 /**
@@ -290,20 +292,119 @@ const deleteUser = async (req, res) => {
 
 /**
  * Verify current session and get user info
+ * Enhanced to properly handle session revocation detection
  */
 const verifySession = async (req, res) => {
   try {
-    const result = await SuperTokensUserService.verifySessionAndGetUser(req.session);
+    console.log('🔍 [DEBUG] verifySession called');
+    
+    // Use centralized session validation
+    const validation = await SessionUtils.validateSessionAndGetUser(req.session);
+    
+    if (!validation.valid) {
+      console.log('❌ [DEBUG] Session validation failed:', validation.reason);
+      return res.status(401).json({
+        success: false,
+        error: validation.reason,
+        message: 'Session has been revoked or expired',
+        sessionRevoked: validation.sessionRevoked || false
+      });
+    }
+    
+    console.log('✅ [DEBUG] Session verified successfully:', {
+      sessionHandle: validation.sessionInfo.sessionHandle,
+      userId: validation.sessionInfo.userId,
+      userEmail: validation.user.email
+    });
+    
     res.json({
       success: true,
-      data: result
+      data: {
+        userId: validation.sessionInfo.userId,
+        sessionHandle: validation.sessionInfo.sessionHandle,
+        isValid: true,
+        accessTokenPayload: validation.accessTokenPayload,
+        user: validation.user,
+        sessionInfo: validation.sessionInfo
+      }
     });
   } catch (error) {
     console.error('❌ Error verifying session:', error);
+    
+    // If it's a session-related error, return 401
+    if (error.message.includes('session') || error.message.includes('unauthorized')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session validation failed',
+        message: 'Session has been revoked or expired',
+        sessionRevoked: true
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Session verification failed',
       message: 'Unable to verify session'
+    });
+  }
+};
+
+/**
+ * Check session status - lightweight endpoint for frontend session validation
+ * Returns 200 if session is valid, 401 if session is revoked/expired
+ */
+const checkSessionStatus = async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG] checkSessionStatus called');
+    
+    // Use centralized session status check
+    const status = await SessionUtils.checkSessionStatus(req.session);
+    
+    if (!status.valid) {
+      console.log('❌ [DEBUG] Session status check failed:', status.reason);
+      return res.status(401).json({
+        success: false,
+        error: status.reason,
+        message: 'Session has been revoked or expired',
+        sessionRevoked: status.sessionRevoked || false
+      });
+    }
+    
+    // Session is valid
+    console.log('✅ [DEBUG] Session status check successful:', {
+      sessionHandle: status.sessionInfo.sessionHandle,
+      userId: status.sessionInfo.userId
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        isValid: true,
+        sessionHandle: status.sessionInfo.sessionHandle,
+        userId: status.sessionInfo.userId,
+        sessionInfo: {
+          timeCreated: status.sessionInfo.timeCreated,
+          expiry: status.sessionInfo.expiry
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error checking session status:', error);
+    
+    // If it's a session-related error, return 401
+    if (error.message.includes('session') || error.message.includes('unauthorized')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session validation failed',
+        message: 'Session has been revoked or expired',
+        sessionRevoked: true
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check session status',
+      message: 'Internal server error'
     });
   }
 };
@@ -360,6 +461,7 @@ const updateUserRole = async (req, res) => {
 const revokeUserSession = async (req, res) => {
   try {
     const { sessionHandle } = req.params;
+    const adminUserId = req.session.getUserId();
     
     if (!sessionHandle) {
       return res.status(400).json({
@@ -369,15 +471,18 @@ const revokeUserSession = async (req, res) => {
       });
     }
     
+    // Use Session.revokeSession directly instead of going through SessionService
     const Session = require('supertokens-node/recipe/session');
-    await Session.revokeSession(sessionHandle);
-    console.log('✅ Session revoked:', sessionHandle);
+    const revoked = await Session.revokeSession(sessionHandle);
+    
+    console.log(`✅ Admin ${adminUserId} revoked session:`, sessionHandle);
     
     res.json({
       success: true,
       message: 'Session revoked successfully',
       data: {
         revokedSessionHandle: sessionHandle,
+        revokedBy: adminUserId,
         revokedAt: new Date().toISOString()
       }
     });
@@ -391,6 +496,334 @@ const revokeUserSession = async (req, res) => {
   }
 };
 
+/**
+ * Get user active sessions (Admin only)
+ */
+const getUserActiveSessions = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const adminUserId = req.session.getUserId();
+    
+    // Support both MongoDB _id and SuperTokens userId
+    let supertokensUserId = userId;
+    if (userId.match(/^[0-9a-fA-F]{24}$/)) {
+      const User = require('../models/User');
+      const mongoUser = await User.findById(userId);
+      if (!mongoUser) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          message: 'User with the specified ID does not exist'
+        });
+      }
+      supertokensUserId = mongoUser.supertokensUserId;
+    }
+    
+    // Use Session.getAllSessionHandlesForUser directly
+    const Session = require('supertokens-node/recipe/session');
+    const sessionHandles = await Session.getAllSessionHandlesForUser(supertokensUserId);
+    
+    // Get session information for each handle
+    const activeSessions = [];
+    for (const handle of sessionHandles) {
+      try {
+        const sessionInfo = await Session.getSessionInformation(handle);
+        if (sessionInfo) {
+          activeSessions.push({
+            sessionHandle: handle,
+            userId: sessionInfo.userId,
+            timeCreated: sessionInfo.timeCreated,
+            expiry: sessionInfo.expiry,
+            sessionDataInDatabase: sessionInfo.sessionDataInDatabase
+          });
+        }
+      } catch (err) {
+        console.warn(`⚠️ Could not get info for session ${handle}:`, err.message);
+      }
+    }
+    
+    console.log(`✅ Admin ${adminUserId} retrieved sessions for user ${supertokensUserId}`);
+    
+    res.json({
+      success: true,
+      data: {
+        userId: supertokensUserId,
+        activeSessions: activeSessions,
+        sessionCount: activeSessions.length,
+        retrievedBy: adminUserId,
+        retrievedAt: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting user active sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user sessions',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Revoke all user sessions (Admin only)
+ */
+const revokeAllUserSessions = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const adminUserId = req.session.getUserId();
+    
+    // Support both MongoDB _id and SuperTokens userId
+    let supertokensUserId = userId;
+    if (userId.match(/^[0-9a-fA-F]{24}$/)) {
+      const User = require('../models/User');
+      const mongoUser = await User.findById(userId);
+      if (!mongoUser) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          message: 'User with the specified ID does not exist'
+        });
+      }
+      supertokensUserId = mongoUser.supertokensUserId;
+    }
+    
+    // Prevent admin from revoking their own sessions
+    if (supertokensUserId === adminUserId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot revoke own sessions',
+        message: 'Admins cannot revoke their own sessions'
+      });
+    }
+    
+    // Use Session.revokeAllSessionsForUser directly
+    const Session = require('supertokens-node/recipe/session');
+    const revokedSessions = await Session.revokeAllSessionsForUser(supertokensUserId);
+    
+    console.log(`✅ Admin ${adminUserId} revoked all sessions for user ${supertokensUserId}`);
+    
+    res.json({
+      success: true,
+      message: 'All user sessions revoked successfully',
+      data: {
+        userId: supertokensUserId,
+        revokedSessionsCount: revokedSessions.length,
+        revokedBy: adminUserId,
+        revokedAt: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error revoking all user sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to revoke user sessions',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Refresh current user session
+ */
+const refreshUserSession = async (req, res) => {
+  try {
+    // Session is already available on req after middleware
+    const sessionHandle = req.session.getHandle();
+    const userId = req.session.getUserId();
+    
+    console.log(`🔄 Refreshing session for user ${userId}, handle: ${sessionHandle}`);
+    
+    // Get user data from MongoDB
+    const User = require('../models/User');
+    const mongoUser = await User.findBySupertokensUserId(userId);
+    
+    if (!mongoUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User not found in database'
+      });
+    }
+    
+    // Try to get session information (optional)
+    let sessionInfo = null;
+    try {
+      const Session = require('supertokens-node/recipe/session');
+      sessionInfo = await Session.getSessionInformation(sessionHandle);
+    } catch (sessionError) {
+      console.warn('⚠️ Could not get session information:', sessionError.message);
+      // Continue without session info - the session is still valid
+    }
+    
+    console.log(`✅ Session refreshed for user ${userId}`);
+    
+    res.json({
+      success: true,
+      message: 'Session refreshed successfully',
+      data: {
+        userId: userId,
+        sessionHandle: sessionHandle,
+        refreshedAt: new Date().toISOString(),
+        sessionInfo: sessionInfo ? {
+          timeCreated: sessionInfo.timeCreated,
+          expiry: sessionInfo.expiry
+        } : null,
+        userData: {
+          email: mongoUser.email,
+          name: mongoUser.name,
+          firstName: mongoUser.firstName,
+          lastName: mongoUser.lastName,
+          phone: mongoUser.phone,
+          role: mongoUser.role,
+          roles: mongoUser.roles,
+          status: mongoUser.status,
+          isEmailVerified: mongoUser.isEmailVerified,
+          isActive: mongoUser.isActive,
+          lastLoginAt: mongoUser.lastLoginAt,
+          preferences: mongoUser.preferences
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error refreshing session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh session',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Get current user session info
+ */
+const getCurrentSessionInfo = async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG] getCurrentSessionInfo called:', {
+      timestamp: new Date().toISOString(),
+      userAgent: req.headers['user-agent'],
+      ip: req.ip
+    });
+    
+    // Use centralized session validation
+    const validation = await SessionUtils.validateSessionAndGetUser(req.session);
+    
+    if (!validation.valid) {
+      console.log('❌ [DEBUG] Session validation failed:', validation.reason);
+      return res.status(401).json({
+        success: false,
+        error: validation.reason,
+        message: 'Session has been revoked or expired',
+        sessionRevoked: validation.sessionRevoked || false
+      });
+    }
+    
+    // Create session info response
+    const sessionInfo = {
+      session: {
+        sessionHandle: validation.sessionInfo.sessionHandle,
+        userId: validation.sessionInfo.userId,
+        accessTokenPayload: validation.accessTokenPayload
+      },
+      user: validation.user,
+      sessionInfo: validation.sessionInfo
+    };
+    
+    res.json({
+      success: true,
+      data: sessionInfo
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting session info:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get session info',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Get current user's active sessions from MongoDB
+ */
+const getCurrentUserActiveSessions = async (req, res) => {
+  try {
+    const userId = req.session.getUserId();
+    
+    // Get user from MongoDB
+    const User = require('../models/User');
+    const mongoUser = await User.findBySupertokensUserId(userId);
+    
+    if (!mongoUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User not found in database'
+      });
+    }
+    
+    // Get SuperTokens sessions for comparison
+    const Session = require('supertokens-node/recipe/session');
+    const superTokensSessions = await Session.getAllSessionHandlesForUser(userId);
+    
+    res.json({
+      success: true,
+      data: {
+        mongoActiveSessions: mongoUser.activeSessions,
+        superTokensSessions: superTokensSessions,
+        sessionCount: {
+          mongo: mongoUser.activeSessions.length,
+          superTokens: superTokensSessions.length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting current user active sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get active sessions',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Manually sync user sessions
+ */
+const syncUserSessions = async (req, res) => {
+  try {
+    const userId = req.session.getUserId();
+    
+    // Import session removal detector
+    const sessionRemovalDetector = require('../services/sessionRemovalDetector');
+    
+    // Manually sync sessions
+    await sessionRemovalDetector.syncUserSessions(userId);
+    
+    res.json({
+      success: true,
+      message: 'Sessions synced successfully',
+      data: {
+        userId: userId,
+        syncedAt: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error syncing user sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync sessions',
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   createUser,
   updateUser,
@@ -400,5 +833,12 @@ module.exports = {
   getUserProfile,
   getAllUsers,
   verifySession,
-  revokeUserSession
+  checkSessionStatus,
+  revokeUserSession,
+  getUserActiveSessions,
+  revokeAllUserSessions,
+  refreshUserSession,
+  getCurrentSessionInfo,
+  getCurrentUserActiveSessions,
+  syncUserSessions
 };

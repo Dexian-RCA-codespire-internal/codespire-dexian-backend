@@ -3,8 +3,8 @@ const router = express.Router();
 
 // Import route modules
 // const authRoutes = require('./auth'); // Removed - using SuperTokens built-in routes
-const otpRoutes = require('./otp'); // Legacy OTP routes
-const emailVerificationRoutes = require('./emailVerification'); // New SuperTokens-based email verification
+
+const emailVerificationRoutes = require('./emailVerification'); // SuperTokens-based email verification
 const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
 const ticketsRoutes = require('./tickets');
@@ -15,8 +15,8 @@ const usersRoutes = require('./users');
 
 // Mount routes
 // router.use('/auth', authRoutes); // Removed - using SuperTokens built-in routes
-router.use('/otp', otpRoutes); // Legacy OTP routes (deprecated)
-router.use('/email-verification', emailVerificationRoutes); // New SuperTokens-based email verification
+
+router.use('/email-verification', emailVerificationRoutes); // SuperTokens-based email verification
 router.use('/users', usersRoutes); // User management routes
 router.use('/llm', llmRoutes);
 router.use('/s3', s3Routes);
@@ -36,7 +36,6 @@ router.get('/', (req, res) => {
       auth: '/api/v1/auth (SuperTokens built-in)',
       users: '/api/v1/users/profile, /api/v1/users (admin), /api/v1/users/{id}/role (admin)',
       emailVerification: '/api/v1/email-verification/send-otp, /api/v1/email-verification/send-magic-link, /api/v1/email-verification/verify-otp, /api/v1/email-verification/resend',
-      legacyOtp: '/api/v1/otp/* (deprecated - use email-verification instead)',
       llm: '/api/v1/llm',
       s3: '/api/v1/s3',
       tickets: '/api/v1/tickets',

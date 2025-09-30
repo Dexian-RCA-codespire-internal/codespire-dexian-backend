@@ -1,7 +1,7 @@
 /**
  * SuperTokens User Service
- * Centralized service for all user operations using SuperTokens
- * This replaces custom user management logic
+ * Centralized service for all user operations using SuperTokens with MongoDB integration
+ * Handles user creation, authentication, session management, and data synchronization
  */
 
 const EmailPassword = require('supertokens-node/recipe/emailpassword');
@@ -10,7 +10,7 @@ const UserRoles = require('supertokens-node/recipe/userroles');
 const EmailVerification = require('supertokens-node/recipe/emailverification');
 const Session = require('supertokens-node/recipe/session');
 const supertokens = require('supertokens-node');
-const User = require('../models/User'); // Minimal MongoDB model
+const User = require('../models/User'); // Enhanced MongoDB model
 
 class SuperTokensUserService {
   

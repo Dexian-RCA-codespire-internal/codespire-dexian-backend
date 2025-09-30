@@ -23,6 +23,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
+const sessionRemovalDetector = require('./services/sessionRemovalDetector');
 const appConfig = require('./config');
 
 
@@ -35,12 +36,6 @@ const PORT = process.env.PORT || 8081;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-    'http://localhost:3001',
-  ],
-  credentials: process.env.CORS_CREDENTIALS === 'true' || true,
-}));
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -53,7 +48,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "blob:", "https://cdn.jsdelivr.net", "https://purecatamphetamine.github.io", "https://*.githubusercontent.com", "https://flagcdn.com"],
       connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
@@ -64,7 +59,22 @@ app.use(helmet({
 }));
 
 // Disable CSP completely for SuperTokens dashboard
-app.use("/api/v1/auth/dashboard", helmet({ contentSecurityPolicy: false }));
+app.use("/auth/dashboard", helmet({ contentSecurityPolicy: false }));
+app.use("/auth", helmet({ 
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "*"],
+      connectSrc: ["'self'", "*"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"],
+    },
+  },
+}));
 
 // Production logging
 if (process.env.NODE_ENV === 'production') {
@@ -99,13 +109,18 @@ const limiter = rateLimit({
 // Apply rate limiting to all requests
 app.use(limiter);
 
-// CORS MUST include SuperTokens headers + credentials:true
+// Consolidated CORS configuration with SuperTokens support
+const corsOrigins = process.env.CORS_ORIGINS ? 
+  process.env.CORS_ORIGINS.split(',') : 
+  [config.websiteDomain, "http://localhost:3001"];
+
 app.use(
   cors({
-    origin: [config.websiteDomain,"http://localhost:3001"], // http://localhost:3001
+    origin: corsOrigins,
     allowedHeaders: ['content-type', ...supertokens.getAllCORSHeaders()],
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
+    optionsSuccessStatus: 200 // For legacy browser support
   })
 );
 
@@ -235,63 +250,10 @@ app.get('/api/v1/test/middleware', (req, res) => {
   });
 });
 
-// Manual session route to handle session requests
+// Single consolidated session endpoint for SuperTokens compatibility
 app.get('/auth/session', async (req, res) => {
   try {
-    console.log('🔍 Manual session endpoint called');
-    
-    // Use SuperTokens Session recipe to verify the session
-    const Session = require('supertokens-node/recipe/session');
-    
-    try {
-      const session = await Session.getSession(req, res, { sessionRequired: false });
-      
-      if (session) {
-        console.log('✅ Valid session found for user:', session.getUserId());
-        
-        const payload = session.getAccessTokenPayload();
-        const userRole = payload.role || 'user';
-        
-        return res.status(200).json({
-          status: 'OK',
-          session: {
-            userId: session.getUserId(),
-            role: userRole,
-            email: payload.email || '',
-            name: payload.name || '',
-            sessionHandle: session.getHandle(),
-            tenantId: session.getTenantId(),
-            accessTokenPayload: payload
-          }
-        });
-      } else {
-        console.log('❌ No valid session found');
-        return res.status(401).json({
-          status: 'UNAUTHORISED',
-          message: 'No valid session found'
-        });
-      }
-    } catch (sessionError) {
-      console.log('❌ Session verification failed:', sessionError.message);
-      return res.status(401).json({
-        status: 'UNAUTHORISED',
-        message: 'Session verification failed'
-      });
-    }
-  } catch (error) {
-    console.error('❌ Error in manual session endpoint:', error);
-    return res.status(500).json({
-      status: 'INTERNAL_SERVER_ERROR',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Custom session endpoint with proper user validation
-app.get('/auth/session', async (req, res) => {
-  try {
-    console.log('🔍 Custom session endpoint called');
-    console.log('🔍 Request cookies:', req.headers.cookie);
+    console.log('🔍 Session endpoint called');
     
     // Use SuperTokens Session recipe to get session
     const Session = require('supertokens-node/recipe/session');
@@ -309,15 +271,12 @@ app.get('/auth/session', async (req, res) => {
           
           if (!user) {
             console.log('❌ User no longer exists in SuperTokens, invalidating session');
-            // Revoke the session since user was deleted
             await Session.revokeSession(session.getHandle());
             return res.status(401).json({
               status: 'UNAUTHORISED',
               message: 'User no longer exists'
             });
           }
-          
-          console.log('✅ User still exists in SuperTokens');
           
           const payload = session.getAccessTokenPayload();
           const userRole = payload.role || 'user';
@@ -336,7 +295,6 @@ app.get('/auth/session', async (req, res) => {
           });
         } catch (userCheckError) {
           console.log('❌ Error checking user existence:', userCheckError.message);
-          // If we can't check user existence, revoke the session for security
           try {
             await Session.revokeSession(session.getHandle());
           } catch (revokeError) {
@@ -370,87 +328,11 @@ app.get('/auth/session', async (req, res) => {
   }
 });
 
-// Compatibility route for /api/v1/auth/session
+// Compatibility route for /api/v1/auth/session (redirects to main session endpoint)
 app.get('/api/v1/auth/session', async (req, res) => {
-  try {
-    console.log('🔍 Compatibility session endpoint called (api/v1 path)');
-    console.log('🔍 Request cookies:', req.headers.cookie);
-    
-    // Use SuperTokens Session recipe to get session
-    const Session = require('supertokens-node/recipe/session');
-    
-    try {
-      const session = await Session.getSession(req, res, { sessionRequired: false });
-      
-      if (session) {
-        console.log('✅ Valid session found for user:', session.getUserId());
-        
-        // Check if user still exists in SuperTokens
-        try {
-          const EmailPassword = require('supertokens-node/recipe/emailpassword');
-          const user = await EmailPassword.getUserById(session.getUserId());
-          
-          if (!user) {
-            console.log('❌ User no longer exists in SuperTokens, invalidating session');
-            // Revoke the session since user was deleted
-            await Session.revokeSession(session.getHandle());
-            return res.status(401).json({
-              status: 'UNAUTHORISED',
-              message: 'User no longer exists'
-            });
-          }
-          
-          console.log('✅ User still exists in SuperTokens');
-          
-          const payload = session.getAccessTokenPayload();
-          const userRole = payload.role || 'user';
-          
-          return res.status(200).json({
-            status: 'OK',
-            session: {
-              userId: session.getUserId(),
-              role: userRole,
-              email: payload.email || '',
-              name: payload.name || '',
-              sessionHandle: session.getHandle(),
-              tenantId: session.getTenantId(),
-              accessTokenPayload: payload
-            }
-          });
-        } catch (userCheckError) {
-          console.log('❌ Error checking user existence:', userCheckError.message);
-          // If we can't check user existence, revoke the session for security
-          try {
-            await Session.revokeSession(session.getHandle());
-          } catch (revokeError) {
-            console.log('⚠️ Error revoking session:', revokeError.message);
-          }
-          return res.status(401).json({
-            status: 'UNAUTHORISED',
-            message: 'Session validation failed'
-          });
-        }
-      } else {
-        console.log('❌ No valid session found');
-        return res.status(401).json({
-          status: 'UNAUTHORISED',
-          message: 'No valid session found'
-        });
-      }
-    } catch (sessionError) {
-      console.log('❌ Session verification failed:', sessionError.message);
-      return res.status(401).json({
-        status: 'UNAUTHORISED',
-        message: 'Session verification failed'
-      });
-    }
-  } catch (error) {
-    console.error('❌ Error in compatibility session endpoint:', error);
-    return res.status(500).json({
-      status: 'INTERNAL_SERVER_ERROR',
-      message: 'Internal server error'
-    });
-  }
+  // Redirect to the main session endpoint to avoid duplication
+  req.url = '/auth/session';
+  return app._router.handle(req, res);
 });
 
 // Custom email verification route for magic links (moved to avoid SuperTokens conflicts)
@@ -669,6 +551,10 @@ server.listen(PORT, async () => {
   } else {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
   }
+
+  // Start session removal detection
+  sessionRemovalDetector.startMonitoring();
+  console.log('✅ Session removal detection started');
 });
 
 // SuperTokens error handler (must be last)

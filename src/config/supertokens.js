@@ -7,17 +7,30 @@ const Passwordless = require('supertokens-node/recipe/passwordless');
 const Dashboard = require('supertokens-node/recipe/dashboard');
 const UserRoles = require('supertokens-node/recipe/userroles');
 const config = require('./index');
-const emailService = require('../services/emailService');
+const User = require('../models/User'); // MongoDB User model
+const EmailVerificationService = require('../services/emailVerificationService');
 
 // Initialize SuperTokens
 const initSuperTokens = () => {
   console.log('🔧 Initializing SuperTokens...');
+  
+  // Log token configuration
+  console.log(`🔐 Token Configuration (Single Source of Truth):`);
+  console.log(`   Access Token: ${config.supertokens.accessTokenMinutes} minutes`);
+  console.log(`   Refresh Token: ${config.supertokens.refreshTokenMinutes} minutes`);
+  console.log(`   Access Token (ms): ${config.supertokens.accessTokenValidity}`);
+  console.log(`   Refresh Token (ms): ${config.supertokens.refreshTokenValidity}`);
+  console.log(`   Access Token (seconds): ${config.supertokens.accessTokenValiditySeconds}`);
+  console.log(`   Refresh Token (minutes): ${config.supertokens.refreshTokenValidityMinutes}`);
   supertokens.init({
     framework: 'express',
     supertokens: {
       connectionURI: config.supertokens.connectionURI,
       apiKey: config.supertokens.apiKey,
     },
+    // Core SuperTokens configuration for token lifetimes
+    accessTokenValidity: config.supertokens.accessTokenValidity,
+    refreshTokenValidity: config.supertokens.refreshTokenValidity,
     appInfo: {
       appName: config.supertokens.appName,
       apiDomain: config.supertokens.apiDomain,      // http://localhost:8081 (backend)
@@ -31,6 +44,46 @@ const initSuperTokens = () => {
       Passwordless.init({
         contactMethod: 'EMAIL',
         flowType: 'USER_INPUT_CODE_AND_MAGIC_LINK', // Enables both OTP and magic link
+        override: {
+          apis: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              consumeCodePOST: async function (input) {
+                try {
+                  console.log('📧 Passwordless OTP verification POST request received');
+                  
+                  // Call the original implementation
+                  const response = await originalImplementation.consumeCodePOST(input);
+                  
+                  // If OTP verification was successful, update user metadata and MongoDB
+                  if (response.status === 'OK') {
+                    try {
+                      console.log('✅ OTP verification successful, updating metadata and MongoDB...');
+                      
+                      const UserMetadata = require('supertokens-node/recipe/usermetadata');
+                      const User = require('../models/User');
+                      const userId = response.user.id;
+                      
+                      // Update email verification status in both MongoDB and SuperTokens metadata
+                      const updateResult = await EmailVerificationService.updateEmailVerificationStatus(userId, true);
+                      
+                      if (!updateResult.success) {
+                        console.warn('⚠️ Email verification status update had issues:', updateResult.errors);
+                      }
+                    } catch (metadataError) {
+                      console.error('❌ Error updating metadata after OTP verification:', metadataError);
+                    }
+                  }
+                  
+                  return response;
+                } catch (error) {
+                  console.error('❌ Error in OTP verification POST:', error);
+                  throw error;
+                }
+              }
+            };
+          }
+        },
         emailDelivery: {
           service: {
             sendEmail: async (input) => {
@@ -49,7 +102,8 @@ const initSuperTokens = () => {
                 
                 if (userInputCode) {
                   console.log('📧 Sending OTP email to:', email, 'OTP:', userInputCode);
-                  const result = await emailService.sendOTPEmail(email, email, userInputCode);
+                  const emailServiceInstance = require('../services/emailService');
+                  const result = await emailServiceInstance.sendOTPEmail(email, email, userInputCode);
                   
                   if (!result.success) {
                     console.error('❌ OTP email failed:', result.error);
@@ -60,7 +114,8 @@ const initSuperTokens = () => {
                 } else if (urlWithLinkCode) {
                   console.log('📧 Sending magic link email to:', email);
                   console.log('📧 Magic link URL:', urlWithLinkCode);
-                  const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
+                  const emailServiceInstance = require('../services/emailService');
+                  const result = await emailServiceInstance.sendMagicLinkEmail(email, email, urlWithLinkCode);
                   
                   if (!result.success) {
                     console.error('❌ Magic link email failed:', result.error);
@@ -83,6 +138,46 @@ const initSuperTokens = () => {
       // Email verification for EmailPassword recipe
       EmailVerification.init({
         mode: 'REQUIRED', // REQUIRED - user must verify email before login
+        override: {
+          apis: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              verifyEmailPOST: async function (input) {
+                try {
+                  console.log('📧 Email verification POST request received');
+                  
+                  // Call the original implementation
+                  const response = await originalImplementation.verifyEmailPOST(input);
+                  
+                  // If email verification was successful, update user metadata and MongoDB
+                  if (response.status === 'OK') {
+                    try {
+                      console.log('✅ Email verification successful, updating metadata and MongoDB...');
+                      
+                      const UserMetadata = require('supertokens-node/recipe/usermetadata');
+                      const User = require('../models/User');
+                      const userId = response.user.id;
+                      
+                      // Update email verification status in both MongoDB and SuperTokens metadata
+                      const updateResult = await EmailVerificationService.updateEmailVerificationStatus(userId, true);
+                      
+                      if (!updateResult.success) {
+                        console.warn('⚠️ Email verification status update had issues:', updateResult.errors);
+                      }
+                    } catch (metadataError) {
+                      console.error('❌ Error updating metadata after email verification:', metadataError);
+                    }
+                  }
+                  
+                  return response;
+                } catch (error) {
+                  console.error('❌ Error in email verification POST:', error);
+                  throw error;
+                }
+              }
+            };
+          }
+        },
         emailDelivery: {
           service: {
             sendEmail: async (input) => {
@@ -102,7 +197,8 @@ const initSuperTokens = () => {
                 if (urlWithLinkCode) {
                   console.log('📧 Sending magic link email to:', email);
                   console.log('📧 Magic link URL:', urlWithLinkCode);
-                  const result = await emailService.sendMagicLinkEmail(email, email, urlWithLinkCode);
+                  const emailServiceInstance = require('../services/emailService');
+                  const result = await emailServiceInstance.sendMagicLinkEmail(email, email, urlWithLinkCode);
                   
                   if (!result.success) {
                     console.error('❌ Magic link email failed:', result.error);
@@ -111,15 +207,24 @@ const initSuperTokens = () => {
                   
                   console.log('✅ SuperTokens magic link email sent successfully');
                 } else if (userInputCode) {
-                  console.log('📧 Sending OTP email to:', email, 'OTP:', userInputCode);
-                  const result = await emailService.sendOTPEmail(email, email, userInputCode);
+                  console.log('📧 ========== SUPERTOKENS OTP EMAIL DELIVERY ==========');
+                  console.log('📧 Sending OTP email to:', email);
+                  console.log('📧 OTP Code:', userInputCode);
+                  console.log('📧 Email context: Registration flow OTP delivery');
+                  console.log('📧 ================================================');
+                  
+                  const emailServiceInstance = require('../services/emailService');
+                  const result = await emailServiceInstance.sendOTPEmail(email, email, userInputCode);
                   
                   if (!result.success) {
                     console.error('❌ OTP email failed:', result.error);
+                    console.error('❌ Full error details:', result);
                     throw new Error(`Failed to send OTP email: ${result.error}`);
                   }
                   
                   console.log('✅ SuperTokens OTP email sent successfully');
+                  console.log('📧 Message ID:', result.messageId);
+                  console.log('📧 ================================================');
                 } else {
                   console.log('⚠️ No userInputCode or urlWithLinkCode provided');
                   console.log('📧 Attempting to extract email from user object or other fields');
@@ -140,7 +245,8 @@ const initSuperTokens = () => {
                           const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/verify-email?token=${tokenRes.token}`;
                           console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
                           
-                          const result = await emailService.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
+                          const emailServiceInstance = require('../services/emailService');
+                          const result = await emailServiceInstance.sendMagicLinkEmail(userEmail, userEmail, magicLinkUrl);
                           
                           if (!result.success) {
                             console.error('❌ Magic link email failed:', result.error);
@@ -198,17 +304,125 @@ const initSuperTokens = () => {
         resetPasswordUsingTokenFeature: {
           disableDefaultUI: false,
         },
+        emailDelivery: {
+          service: {
+            sendEmail: async (input) => {
+              try {
+                console.log('📧 SuperTokens EmailPassword email delivery called');
+                console.log('📧 Input details:', {
+                  email: input.email,
+                  type: input.type,
+                  user: input.user,
+                  hasPasswordResetLink: !!input.passwordResetLink,
+                  hasUrlWithLinkCode: !!input.urlWithLinkCode,
+                  hasResetLink: !!input.resetLink
+                });
+                
+                // Extract email from input or user object
+                const email = input.email || input.user?.email;
+                const type = input.type;
+                
+                if (type === 'PASSWORD_RESET') {
+                  console.log('📧 Sending password reset email to:', email);
+                  
+                  // Check if we have a valid email
+                  if (!email) {
+                    console.error('❌ No email found in input');
+                    console.error('❌ Input email:', input.email);
+                    console.error('❌ User email:', input.user?.email);
+                    console.error('❌ Available properties:', Object.keys(input));
+                    throw new Error('Email address not provided');
+                  }
+                  
+                  // Safely log input without circular references
+                  const safeInput = {
+                    email: input.email,
+                    userEmail: input.user?.email,
+                    type: input.type,
+                    hasPasswordResetLink: !!input.passwordResetLink,
+                    hasUrlWithLinkCode: !!input.urlWithLinkCode,
+                    hasResetLink: !!input.resetLink,
+                    user: input.user ? {
+                      id: input.user.id,
+                      email: input.user.email
+                    } : null
+                  };
+                  console.log('📧 Password reset input (safe):', JSON.stringify(safeInput, null, 2));
+                  
+                  // SuperTokens provides the reset link in different possible properties
+                  const resetLink = input.passwordResetLink || input.urlWithLinkCode || input.resetLink;
+                  
+                  if (!resetLink) {
+                    console.error('❌ No password reset link found in input');
+                    console.error('❌ Available properties:', Object.keys(input));
+                    throw new Error('Password reset link not provided');
+                  }
+                  
+                  console.log('📧 Using reset link:', resetLink);
+                  
+                  // Dynamically import email service to avoid circular dependency issues
+                  let emailServiceInstance;
+                  try {
+                    emailServiceInstance = require('../services/emailService');
+                    console.log('📧 Email service imported successfully');
+                  } catch (importError) {
+                    console.error('❌ Failed to import email service:', importError);
+                    throw new Error('Email service import failed');
+                  }
+                  
+                  // Check if email service is properly initialized
+                  if (!emailServiceInstance || !emailServiceInstance.transporter) {
+                    console.error('❌ Email service not properly initialized');
+                    console.error('❌ Email service instance:', !!emailServiceInstance);
+                    console.error('❌ Email service transporter:', !!emailServiceInstance?.transporter);
+                    throw new Error('Email service not initialized');
+                  }
+                  
+                  console.log('📧 Email service is ready, sending password reset email...');
+                  
+                  const result = await emailServiceInstance.sendPasswordResetEmail(email, email, resetLink);
+                  
+                  if (!result.success) {
+                    console.error('❌ Password reset email failed:', result.error);
+                    throw new Error(`Failed to send password reset email: ${result.error}`);
+                  }
+                  
+                  console.log('✅ SuperTokens password reset email sent successfully');
+                } else {
+                  console.log('📧 Unhandled email type:', type);
+                  // Safely log input without circular references
+                  const safeInput = {
+                    email: input.email,
+                    userEmail: input.user?.email,
+                    type: input.type,
+                    availableProperties: Object.keys(input)
+                  };
+                  console.log('📧 Safe input for unhandled type:', JSON.stringify(safeInput, null, 2));
+                  // For other email types, you might want to handle them differently
+                }
+              } catch (error) {
+                console.error('❌ Failed to send SuperTokens EmailPassword email:', error);
+                console.error('❌ Error stack:', error.stack);
+                throw error;
+              }
+            },
+          },
+        },
         override: {
           apis: (originalImplementation) => {
             return {
               ...originalImplementation,
               signUpPOST: async function (input) {
-                // Call the original signup
-                const response = await originalImplementation.signUpPOST(input);
-                console.log(response)
-                // If signup was successful, create user in our database
-                if (response.status === 'OK') {
-                  try {
+                try {
+                  console.log('📧 Starting signup process for:', input.formFields);
+                  
+                  // Call the original signup
+                  const response = await originalImplementation.signUpPOST(input);
+                  console.log('📧 Original signup response:', response);
+                  
+                  // If signup was successful, create user in our database
+                  if (response.status === 'OK') {
+                    try {
                     const User = require('../models/User');
                     // SuperTokensOTPService removed - using built-in email verification
                     
@@ -230,8 +444,24 @@ const initSuperTokens = () => {
                                     lastName ? lastName.trim() :
                                     email;
                     
-                    // Create minimal user record in MongoDB
-                    await User.createUser(response.user.id);
+                    // Create enhanced user record in MongoDB
+                    console.log('📊 Creating user record in MongoDB for ID:', response.user.id);
+                    const mongoUser = await User.createUser(response.user.id, email, {
+                      name: fullName,
+                      firstName: firstName || '',
+                      lastName: lastName || '',
+                      phone: phone || '',
+                      role: 'admin',
+                      roles: ['admin'],
+                      status: 'active',
+                      isEmailVerified: false,
+                      preferences: {
+                        theme: 'light',
+                        notifications: { email: true, push: true },
+                        language: 'en'
+                      }
+                    });
+                    console.log('✅ MongoDB user record created:', mongoUser);
                     
                     // Store user data in SuperTokens metadata
                     const UserMetadata = require('supertokens-node/recipe/usermetadata');
@@ -254,31 +484,88 @@ const initSuperTokens = () => {
                     
                     console.log('✅ User created with SuperTokens metadata via signup');
                     
-                    // Send OTP verification automatically after signup
+                    // Send both OTP and Magic Link verification automatically after signup
                     try {
-                      const Passwordless = require('supertokens-node/recipe/passwordless');
+                      console.log('📧 Triggering automatic email verification after signup for:', email);
                       
-                      // Send OTP using Passwordless recipe
+                      // 1. Send Email Verification Magic Link
+                      try {
+                        console.log('📧 Sending EmailVerification magic link for:', email);
+                        const EmailVerification = require('supertokens-node/recipe/emailverification');
+                        const supertokens = require('supertokens-node');
+                        
+                        const recipeUserId = new supertokens.RecipeUserId(response.user.id);
+                        const tokenResult = await EmailVerification.createEmailVerificationToken("public", recipeUserId, email);
+                        
+                        if (tokenResult.status === "OK") {
+                          console.log('✅ Email verification token created successfully');
+                          
+                          // Send the email verification email
+                          await EmailVerification.sendEmailVerificationEmail("public", response.user.id, recipeUserId, email);
+                          console.log('✅ Email verification magic link sent successfully');
+                        } else {
+                          console.error('❌ Failed to create email verification token:', tokenResult);
+                        }
+                      } catch (emailVerificationError) {
+                        console.error('❌ Email verification error:', emailVerificationError);
+                      }
+                      
+                      // 2. Create the Passwordless OTP code - this should trigger email automatically
+                      const Passwordless = require('supertokens-node/recipe/passwordless');
+                      console.log('📧 Creating SuperTokens OTP code for:', email);
+                      
                       const otpResponse = await Passwordless.createCode({
                         tenantId: "public",
                         email: email
                       });
                       
+                      console.log("📧 SuperTokens OTP Response:", JSON.stringify(otpResponse, null, 2));
+                      
                       if (otpResponse.status === "OK") {
-                        console.log('✅ OTP sent automatically after signup');
+                        console.log('✅ SuperTokens OTP code created successfully');
+                        console.log('📧 OTP should be sent automatically via configured email delivery service');
+                        
+                        // Log the details for debugging
+                        if (otpResponse.userInputCode) {
+                          console.log('📧 Generated OTP code:', otpResponse.userInputCode);
+                          console.log('📧 OTP valid until:', otpResponse.codeLifetime);
+                        }
                       } else {
-                        console.error('❌ Failed to send OTP after signup:', otpResponse.status);
+                        console.error('❌ Failed to create SuperTokens OTP:', otpResponse.status);
+                        
+                        // Fallback: Use our direct email service
+                        console.log('📧 Falling back to direct email service');
+                        const emailServiceInstance = require('../services/emailService');
+                        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                        
+                        const emailResult = await emailServiceInstance.sendOTPEmail(email, fullName || email, otp);
+                        
+                        if (emailResult.success) {
+                          console.log('✅ Fallback OTP sent via direct email service');
+                          console.log('📧 Fallback OTP for testing (remove in production):', otp);
+                        } else {
+                          console.error('❌ Fallback OTP email also failed:', emailResult.error);
+                        }
                       }
                     } catch (verificationError) {
-                      console.error('❌ Error sending OTP after signup:', verificationError.message);
+                      console.error('❌ Error in verification flow after signup:', verificationError.message);
+                      console.error('📧 Full error details:', verificationError);
                     }
                   } catch (error) {
                     console.error('❌ Error creating user in database via SuperTokens signup:', error);
                     // Don't fail the signup if database creation fails
                   }
+                  }
+                  
+                  return response;
+                } catch (signupError) {
+                  console.error('❌ CRITICAL ERROR in signup flow:', signupError);
+                  console.error('📧 Error stack:', signupError.stack);
+                  console.error('📧 Input data:', JSON.stringify(input, null, 2));
+                  
+                  // Return the error to SuperTokens properly
+                  throw signupError;
                 }
-                
-                return response;
               }
             };
           }
@@ -290,14 +577,22 @@ const initSuperTokens = () => {
         cookieSameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         sessionExpiredStatusCode: 401,
         invalidClaimStatusCode: 403,
-        // Enable single session per user
+        // Enhanced session configuration
         useDynamicAccessTokenSigningKey: true,
+        // Session lifetime configuration (configurable via environment variables)
+        accessTokenValidity: config.supertokens.accessTokenValidity,
+        refreshTokenValidity: config.supertokens.refreshTokenValidity,
+        // Enable single session per user (optional - can be disabled for multi-device)
+        // useDynamicAccessTokenSigningKey: true,
         override: {
           functions: (originalImplementation) => {
             return {
               ...originalImplementation,
               createNewSession: async function (input) {
-                console.log('🔐 Creating session for user:', input.userId);
+                console.log('🔐 Creating enhanced session for user:', input.userId);
+                
+                // Import SessionService
+                const SessionService = require('../services/sessionService');
                 
                 // Terminate existing sessions for this user (single session enforcement)
                 try {
@@ -313,45 +608,71 @@ const initSuperTokens = () => {
                   console.log('⚠️ Error terminating existing sessions:', error.message);
                 }
                 
-                // Create new session with user role
+                // Create new session
                 const session = await originalImplementation.createNewSession(input);
                 
-                // Add user role and data to session from SuperTokens
+                // Use SessionService to create enhanced session data
                 try {
-                  const UserMetadata = require('supertokens-node/recipe/usermetadata');
-                  const UserRoles = require('supertokens-node/recipe/userroles');
-                  
-                  // Get user metadata from SuperTokens
-                  const metadata = await UserMetadata.getUserMetadata(input.userId);
-                  
-                  // Get user roles from SuperTokens
-                  const rolesResponse = await UserRoles.getRolesForUser("public", input.userId);
-                  const userRoles = rolesResponse.roles || ['admin']; // Default to admin
-                  const primaryRole = userRoles[0] || 'admin';
-                  
-                  await session.mergeIntoAccessTokenPayload({
-                    role: primaryRole,
-                    email: metadata.metadata.email || '',
-                    name: metadata.metadata.name || ''
+                  const sessionPayload = await SessionService.createSession(input.userId, {
+                    sessionHandle: session.getHandle()
                   });
                   
-                  console.log('✅ Added role to session from SuperTokens:', primaryRole);
+                  // Add comprehensive data to session payload
+                  await session.mergeIntoAccessTokenPayload(sessionPayload);
+                  
+                  console.log('✅ Enhanced session created successfully:', {
+                    userId: input.userId,
+                    role: sessionPayload.role,
+                    email: sessionPayload.email,
+                    sessionId: sessionPayload.sessionId
+                  });
+                  
                 } catch (error) {
-                  console.log('⚠️ Error adding role to session:', error.message);
-                  // If metadata not found, set default values
+                  console.log('⚠️ Error creating enhanced session data:', error.message);
+                  // Fallback to basic session data
                   try {
                     await session.mergeIntoAccessTokenPayload({
-                      role: 'admin', // Default role
+                      role: 'admin',
                       email: '',
-                      name: ''
+                      name: '',
+                      sessionCreatedAt: new Date().toISOString()
                     });
-                    console.log('✅ Added default role to session: admin');
+                    console.log('✅ Added fallback session data');
                   } catch (payloadError) {
-                    console.log('⚠️ Error setting default role:', payloadError.message);
+                    console.log('⚠️ Error setting fallback session data:', payloadError.message);
                   }
                 }
                 
                 return session;
+              },
+              
+              // Enhanced session refresh
+              refreshSession: async function (input) {
+                console.log('🔄 Refreshing session:', input.sessionHandle);
+                
+                try {
+                  // Refresh session using original implementation
+                  const refreshedSession = await originalImplementation.refreshSession(input);
+                  
+                  // Update session with fresh user data (non-blocking)
+                  try {
+                    const SessionService = require('../services/sessionService');
+                    const refreshResult = await SessionService.refreshSession(input.sessionHandle);
+                    
+                    if (refreshResult.success) {
+                      console.log('✅ Session refreshed with updated user data');
+                    }
+                  } catch (refreshError) {
+                    console.warn('⚠️ Could not update session with fresh data:', refreshError.message);
+                    // Don't fail the refresh if data update fails
+                  }
+                  
+                  return refreshedSession;
+                  
+                } catch (error) {
+                  console.error('❌ Error during session refresh:', error);
+                  throw error;
+                }
               }
             };
           }
