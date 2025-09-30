@@ -494,7 +494,6 @@ const bulkImportAllTickets = async (options = {}) => {
       };
 
       const response = await apiClient.get(config.servicenow.apiEndpoint, { params });
-
       if (response.status === 200 && response.data.result) {
         const tickets = response.data.result;
         allTickets = allTickets.concat(tickets);
@@ -568,10 +567,23 @@ const bulkImportAllTickets = async (options = {}) => {
           // Create new ticket
           try {
             const newTicket = new Ticket(ticketDoc);
-            savedTicket = await newTicket.save();
+            savedTicket = await newTicket.save();//savibng bulk update
             savedCount++;
             isNewTicket = true;
-            
+            // const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticketDoc, savedTicket._id);
+            // Vectorize and store in Qdrant ONLY for new tickets
+        if (isNewTicket) {
+          try {
+            const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticketDoc, savedTicket._id);
+            if (vectorResult.success) {
+              vectorizedCount++;
+            } else {
+              console.log(`⚠️ Failed to vectorize ticket ${ticketData.number}: ${vectorResult.reason || vectorResult.error}`);
+            }
+          } catch (vectorError) {
+            console.error(`❌ Error vectorizing ticket ${ticketData.number}:`, vectorError.message);
+          }
+        }
             // Create SLA record for new ticket
             try {
               const slaResult = await createOrUpdateSLA(savedTicket);
