@@ -9,7 +9,7 @@ const { config: defaultConfig } = require('../shared');
 const config = defaultConfig.createRAGAgentConfig('auto-suggestion', {
     // LLM settings for text suggestions
     llm: {
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         temperature: 0.3, // Lower temperature for more focused suggestions
         maxTokens: 100 // Limited tokens for short suggestions
     },

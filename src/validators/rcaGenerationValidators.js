@@ -57,47 +57,7 @@ const validateRCAGeneration = [
         .exists()
         .withMessage('RCA fields are required')
         .isObject()
-        .withMessage('RCA fields must be an object'),
-    
-    body('rcaFields.problem')
-        .exists()
-        .withMessage('Problem field is required')
-        .isString()
-        .withMessage('Problem must be a string')
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Problem must be between 10 and 1000 characters'),
-    
-    body('rcaFields.timeline')
-        .exists()
-        .withMessage('Timeline field is required')
-        .isString()
-        .withMessage('Timeline must be a string')
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Timeline must be between 10 and 1000 characters'),
-    
-    body('rcaFields.impact')
-        .exists()
-        .withMessage('Impact field is required')
-        .isString()
-        .withMessage('Impact must be a string')
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Impact must be between 10 and 1000 characters'),
-    
-    body('rcaFields.rootCause')
-        .exists()
-        .withMessage('Root cause field is required')
-        .isString()
-        .withMessage('Root cause must be a string')
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Root cause must be between 10 and 1000 characters'),
-    
-    body('rcaFields.correctiveActions')
-        .exists()
-        .withMessage('Corrective actions field is required')
-        .isString()
-        .withMessage('Corrective actions must be a string')
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Corrective actions must be between 10 and 1000 characters'),
+        .withMessage('RCA fields must be an object')    
 ];
 
 /**

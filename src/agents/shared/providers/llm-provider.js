@@ -10,12 +10,12 @@ const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
  */
 const LLM_CONFIGS = {
     gemini: {
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         temperature: 0.1,
         maxOutputTokens: 2048,
         createInstance: (config = {}) => new ChatGoogleGenerativeAI({
             apiKey: process.env.GEMINI_API_KEY,
-            model: config.model || 'gemini-2.0-flash-exp',
+            model: config.model || 'gemini-2.0-flash',
             temperature: config.temperature || 0.1,
             maxOutputTokens: config.maxOutputTokens || 2048,
             ...config
