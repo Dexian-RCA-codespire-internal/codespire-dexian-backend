@@ -223,29 +223,29 @@ Guidelines:
     /**
      * Validate root cause input
      */
-    validateRootCause(rootCause) {
-        const errors = [];
+    // validateRootCause(rootCause) {
+    //     const errors = [];
         
-        if (!rootCause || typeof rootCause !== 'string') {
-            errors.push('Root cause must be a non-empty string');
-        } else {
-            const length = rootCause.length;
-            const limits = config.validation.textLimits.rootCause;
+    //     if (!rootCause || typeof rootCause !== 'string') {
+    //         errors.push('Root cause must be a non-empty string');
+    //     } else {
+    //         const length = rootCause.length;
+    //         const limits = config.validation.textLimits.rootCause;
             
-            if (length < limits.min) {
-                errors.push(`Root cause must be at least ${limits.min} characters`);
-            }
+    //         if (length < limits.min) {
+    //             errors.push(`Root cause must be at least ${limits.min} characters`);
+    //         }
             
-            if (length > limits.max) {
-                errors.push(`Root cause must not exceed ${limits.max} characters`);
-            }
-        }
+    //         if (length > limits.max) {
+    //             errors.push(`Root cause must not exceed ${limits.max} characters`);
+    //         }
+    //     }
         
-        return {
-            isValid: errors.length === 0,
-            errors
-        };
-    }
+    //     return {
+    //         isValid: errors.length === 0,
+    //         errors
+    //     };
+    // }
 
 }
 
