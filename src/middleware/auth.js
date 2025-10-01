@@ -41,16 +41,9 @@ const requireRole = (role) => {
       const userId = req.session.getUserId();
       console.log('🔍 Checking role for user:', userId, 'required role:', role);
       
-      // Check if user has the required role in SuperTokens
-      let userRoles;
-      try {
-        userRoles = await UserRoles.getRolesForUser("public", userId);
-        console.log('🔍 User roles (with tenantId):', userRoles);
-      } catch (error) {
-        console.log('🔍 First attempt failed, trying without tenantId:', error.message);
-        userRoles = await UserRoles.getRolesForUser(userId);
-        console.log('🔍 User roles (without tenantId):', userRoles);
-      }
+      // Check if user has the required role in SuperTokens with tenantId "public"
+      const userRoles = await UserRoles.getRolesForUser("public", userId);
+      console.log('🔍 User roles:', userRoles);
       
       const hasRole = userRoles.roles.includes(role);
       console.log('🔍 User has required role:', hasRole);
@@ -81,23 +74,9 @@ const getUserPermissions = async (userId) => {
   try {
     console.log('🔍 Getting permissions for user:', userId);
     
-    // Get user roles first - try different API signatures
-    let userRoles;
-    try {
-      // Try with tenantId parameter
-      userRoles = await UserRoles.getRolesForUser("public", userId);
-      console.log('🔍 User roles (with tenantId):', userRoles);
-    } catch (error) {
-      console.log('🔍 First attempt failed, trying without tenantId:', error.message);
-      try {
-        // Try without tenantId parameter
-        userRoles = await UserRoles.getRolesForUser(userId);
-        console.log('🔍 User roles (without tenantId):', userRoles);
-      } catch (error2) {
-        console.error('🔍 Both attempts failed:', error2.message);
-        throw error2;
-      }
-    }
+    // Get user roles first with tenantId "public"
+    const userRoles = await UserRoles.getRolesForUser("public", userId);
+    console.log('🔍 User roles:', userRoles);
     
     if (!userRoles || !userRoles.roles || userRoles.roles.length === 0) {
       console.log('🔍 No roles found for user');
@@ -176,8 +155,8 @@ const requireAnyRole = (roles) => {
     try {
       const userId = req.session.getUserId();
       
-      // Check if user has any of the required roles in SuperTokens
-      const userRoles = await UserRoles.getRolesForUser(userId);
+      // Check if user has any of the required roles in SuperTokens with tenantId "public"
+      const userRoles = await UserRoles.getRolesForUser("public", userId);
       const hasAnyRole = roles.some(role => userRoles.roles.includes(role));
       
       if (!hasAnyRole) {

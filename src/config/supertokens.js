@@ -204,28 +204,7 @@ const initSuperTokens = () => {
                                     lastName ? lastName.trim() :
                                     email;
                     
-                    // Create user in our database
-                    await User.createUser(
-                      response.user.id,
-                      email,
-                      fullName,
-                      firstName,
-                      lastName,
-                      phone
-                    );
-                    
-                    // Send OTP email for verification
-                    try {
-                      const otpResult = await SuperTokensOTPService.sendOTP(email);
-                      if (otpResult.success) {
-                        console.log('✅ OTP sent during SuperTokens signup');
-                      } else {
-                        console.error('Failed to send OTP during SuperTokens signup:', otpResult.error);
-                      }
-                    } catch (otpError) {
-                      console.error('Error sending OTP during SuperTokens signup:', otpError);
-                    }
-
+                    // Assign default 'user' role to the user in SuperTokens
                     // Temporary : A flow to assign roles to users during signup, change values between existing roles [user/admin]
                     try {
                       const RBACService = require('../services/rbacService');
@@ -237,6 +216,39 @@ const initSuperTokens = () => {
                       }
                     } catch (roleError) {
                       console.error('Error assigning default role during signup:', roleError);
+                    }
+                    
+                    // Create user in our database
+                    const user = await User.createUser(
+                      response.user.id,
+                      email,
+                      fullName,
+                      firstName,
+                      lastName,
+                      phone,
+                      ['user'], // Default role
+                      [] // Permissions will be synced from SuperTokens
+                    );
+                    
+                    // Sync roles and permissions from SuperTokens to MongoDB
+                    try {
+                      await user.syncRolesFromSuperTokens();
+                      await user.syncPermissionsFromSuperTokens();
+                      console.log('✅ Roles and permissions synced from SuperTokens');
+                    } catch (syncError) {
+                      console.error('❌ Error syncing roles/permissions:', syncError);
+                    }
+                    
+                    // Send OTP email for verification
+                    try {
+                      const otpResult = await SuperTokensOTPService.sendOTP(email);
+                      if (otpResult.success) {
+                        console.log('✅ OTP sent during SuperTokens signup');
+                      } else {
+                        console.error('Failed to send OTP during SuperTokens signup:', otpResult.error);
+                      }
+                    } catch (otpError) {
+                      console.error('Error sending OTP during SuperTokens signup:', otpError);
                     }
                     
                     console.log('✅ User created in database via SuperTokens signup');

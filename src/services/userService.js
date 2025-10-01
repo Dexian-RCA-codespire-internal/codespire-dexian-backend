@@ -69,10 +69,28 @@ async function fetchUsersFromDB(options = {}) {
           .sort(sort)
           .skip(skip)
           .limit(limitNum)
-          .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry')
-          .lean(),
+          .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry'),
         User.countDocuments(filter)
       ]);
+
+      // Sync roles and permissions from SuperTokens for all users
+      try {
+        console.log('🔄 Syncing roles and permissions for', users.length, 'users...');
+        const syncPromises = users.map(async (user) => {
+          try {
+            await user.syncRolesFromSuperTokens();
+            await user.syncPermissionsFromSuperTokens();
+          } catch (syncError) {
+            console.error(`Error syncing roles/permissions for user ${user._id}:`, syncError);
+            // Continue even if sync fails for individual users
+          }
+        });
+        await Promise.all(syncPromises);
+        console.log('✅ Roles and permissions sync completed for all users');
+      } catch (syncError) {
+        console.error('Error in batch sync of roles/permissions:', syncError);
+        // Continue even if sync fails
+      }
 
       // Calculate pagination info
       const totalPages = Math.ceil(totalCount / limitNum);
@@ -195,8 +213,7 @@ async function getUserStats(options = {}) {
 async function getUserById(userId) {
     try {
       const user = await User.findById(userId)
-        .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry')
-        .lean();
+        .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry');
 
       if (!user) {
         return {
@@ -204,6 +221,15 @@ async function getUserById(userId) {
           error: 'User not found',
           data: null
         };
+      }
+
+      // Sync roles and permissions from SuperTokens to ensure they're up-to-date
+      try {
+        await user.syncRolesFromSuperTokens();
+        await user.syncPermissionsFromSuperTokens();
+      } catch (syncError) {
+        console.error('Error syncing roles/permissions for user:', syncError);
+        // Continue even if sync fails
       }
 
       return {
@@ -267,7 +293,7 @@ async function updateUserStatus(userId, status) {
 
 /**
  * Update user roles
- * @param {String} userId - User ID
+ * @param {String} userId - MongoDB User ID
  * @param {Array} roles - New roles array
  * @returns {Object} Update result
  */
@@ -283,12 +309,9 @@ async function updateUserRoles(userId, roles) {
         };
       }
 
-      const user = await User.findByIdAndUpdate(
-        userId,
-        { roles },
-        { new: true, runValidators: true }
-      ).select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry');
-
+      // Get user from MongoDB to get SuperTokens ID
+      const user = await User.findById(userId);
+      
       if (!user) {
         return {
           success: false,
@@ -296,10 +319,61 @@ async function updateUserRoles(userId, roles) {
         };
       }
 
+      const supertokensUserId = user.supertokensUserId;
+      
+      // Import RBACService for proper role management
+      const RBACService = require('./rbacService');
+      const UserRoles = require('supertokens-node/recipe/userroles');
+      
+      // Get current roles from SuperTokens
+      const currentRolesResult = await RBACService.getUserRoles(supertokensUserId);
+      const currentRoles = currentRolesResult.success ? currentRolesResult.roles : [];
+      
+      console.log(`🔄 Updating roles for user ${userId} (${supertokensUserId})`);
+      console.log(`   Current roles: ${currentRoles.join(', ')}`);
+      console.log(`   New roles: ${roles.join(', ')}`);
+      
+      // Determine roles to add and remove
+      const rolesToAdd = roles.filter(role => !currentRoles.includes(role));
+      const rolesToRemove = currentRoles.filter(role => !roles.includes(role));
+      
+      console.log(`   Roles to add: ${rolesToAdd.join(', ') || 'none'}`);
+      console.log(`   Roles to remove: ${rolesToRemove.join(', ') || 'none'}`);
+      
+      // Remove roles that are no longer needed
+      for (const role of rolesToRemove) {
+        const removeResult = await RBACService.removeRoleFromUser(supertokensUserId, role);
+        if (!removeResult.success) {
+          console.error(`❌ Failed to remove role ${role}:`, removeResult.error);
+        } else {
+          console.log(`✅ Removed role ${role} from SuperTokens`);
+        }
+      }
+      
+      // Add new roles
+      for (const role of rolesToAdd) {
+        const addResult = await RBACService.assignRoleToUser(supertokensUserId, role);
+        if (!addResult.success) {
+          console.error(`❌ Failed to add role ${role}:`, addResult.error);
+        } else {
+          console.log(`✅ Added role ${role} to SuperTokens`);
+        }
+      }
+      
+      // Sync roles and permissions from SuperTokens to MongoDB
+      await user.syncRolesFromSuperTokens();
+      await user.syncPermissionsFromSuperTokens();
+      
+      // Reload user to get updated data
+      const updatedUser = await User.findById(userId)
+        .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry');
+
+      console.log(`✅ User roles updated successfully to: ${updatedUser.roles.join(', ')}`);
+
       return {
         success: true,
-        data: user,
-        message: `User roles updated to ${roles.join(', ')}`
+        data: updatedUser,
+        message: `User roles updated to ${updatedUser.roles.join(', ')}`
       };
 
     } catch (error) {
@@ -363,7 +437,7 @@ async function deleteUser(userId) {
  */
 async function createUser(userData) {
     try {
-      const { email, password, firstName, lastName, phone } = userData;
+      const { email, password, firstName, lastName, phone, roles = ['user'] } = userData;
 
       // Validate required fields
       if (!email || !password) {
@@ -408,6 +482,34 @@ async function createUser(userData) {
 
       await UserMetadata.updateUserMetadata(supertokensUserId, userMetadata);
 
+      // Assign roles to user in SuperTokens
+      // Validate roles first
+      const UserRoles = require('supertokens-node/recipe/userroles');
+      const validRoles = ['admin', 'user'];
+      const rolesToAssign = roles && Array.isArray(roles) && roles.length > 0 
+        ? roles.filter(role => validRoles.includes(role))
+        : [];
+      
+      // Default to 'user' role if no valid roles provided
+      if (rolesToAssign.length === 0) {
+        rolesToAssign.push('user');
+      }
+      
+      console.log(`🔐 Roles to assign: ${rolesToAssign.join(', ')}`);
+      
+      try {
+        // Assign each role to the user (with tenant ID "public")
+        for (const role of rolesToAssign) {
+          await UserRoles.addRoleToUser("public", supertokensUserId, role);
+          console.log(`✅ Role "${role}" assigned to user in SuperTokens`);
+        }
+        
+        console.log('✅ All roles assigned successfully to SuperTokens:', rolesToAssign);
+      } catch (roleError) {
+        console.error('❌ Failed to assign roles to SuperTokens:', roleError);
+        // Don't fail user creation if role assignment fails, but log it
+      }
+
       // Create user in MongoDB with SuperTokens ID (same as registration flow)
       try {
         console.log('Creating user in MongoDB with data:', {
@@ -416,7 +518,8 @@ async function createUser(userData) {
           fullName,
           firstName,
           lastName,
-          phone
+          phone,
+          roles: rolesToAssign
         });
         
         const user = await User.createUser(
@@ -425,10 +528,34 @@ async function createUser(userData) {
           fullName,
           firstName,
           lastName,
-          phone
+          phone,
+          rolesToAssign, // Use the validated roles that were assigned to SuperTokens
+          [] // permissions will be synced from SuperTokens
         );
         
         console.log('✅ User created successfully in MongoDB:', user._id);
+        
+        // Sync roles and permissions from SuperTokens to MongoDB
+        try {
+          console.log('🔄 Syncing roles and permissions from SuperTokens...');
+          const rolesResult = await user.syncRolesFromSuperTokens();
+          const permissionsResult = await user.syncPermissionsFromSuperTokens();
+          
+          if (rolesResult.success) {
+            console.log('✅ Roles synced successfully:', rolesResult.roles);
+          } else {
+            console.error('❌ Failed to sync roles:', rolesResult.error);
+          }
+          
+          if (permissionsResult.success) {
+            console.log('✅ Permissions synced successfully:', permissionsResult.permissions);
+          } else {
+            console.error('❌ Failed to sync permissions:', permissionsResult.error);
+          }
+        } catch (syncError) {
+          console.error('❌ Error syncing roles/permissions:', syncError);
+          // Don't fail user creation if sync fails, but log it
+        }
         
         // Send OTP for email verification using the user object directly
         let otpData = null;

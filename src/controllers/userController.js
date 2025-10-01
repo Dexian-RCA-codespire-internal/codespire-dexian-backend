@@ -314,14 +314,15 @@ async function createUserController(req, res) {
         });
       }
 
-      const { email, password, firstName, lastName, phone } = req.body;
+      const { email, password, firstName, lastName, phone, roles } = req.body;
 
       const result = await createUser({
         email,
         password,
         firstName,
         lastName,
-        phone
+        phone,
+        roles // Accept roles from frontend
       });
 
       if (result.success) {

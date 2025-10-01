@@ -41,7 +41,15 @@ const createUserValidation = [
     .optional()
     .trim()
     .isLength({ max: 20 })
-    .withMessage('Phone must be less than 20 characters')
+    .withMessage('Phone must be less than 20 characters'),
+  body('roles')
+    .optional()
+    .isArray()
+    .withMessage('Roles must be an array'),
+  body('roles.*')
+    .optional()
+    .isIn(['admin', 'user'])
+    .withMessage('Each role must be either admin or user')
 ];
 
 const updateStatusValidation = [
@@ -293,6 +301,12 @@ router.get('/:userId', authenticateToken, getUserByIdController);
  *               phone:
  *                 type: string
  *                 maxLength: 20
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [admin, user]
+ *                 example: ["user"]
  *     responses:
  *       201:
  *         description: User created successfully

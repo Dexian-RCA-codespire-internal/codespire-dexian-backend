@@ -44,8 +44,8 @@ class RBACService {
    */
   static async assignRoleToUser(userId, role) {
     try {
-      // Assign role in SuperTokens, public is the tenant id
-      const result = await UserRoles.addRoleToUser("public",userId, role);
+      // Assign role in SuperTokens with tenantId "public"
+      const result = await UserRoles.addRoleToUser("public", userId, role);
       
       if (result.status === 'OK') {
         // Sync with MongoDB
@@ -85,8 +85,8 @@ class RBACService {
    */
   static async removeRoleFromUser(userId, role) {
     try {
-      // Remove role in SuperTokens
-      const result = await UserRoles.removeUserRole(userId, role);
+      // Remove role in SuperTokens with tenantId "public"
+      const result = await UserRoles.removeUserRole("public", userId, role);
       
       if (result.status === 'OK') {
         // Sync with MongoDB
@@ -129,15 +129,9 @@ class RBACService {
     try {
       console.log('🔍 RBACService: Getting roles for user:', userId);
       
-      let roles;
-      try {
-        roles = await UserRoles.getRolesForUser("public", userId);
-        console.log('🔍 RBACService: User roles (with tenantId):', roles);
-      } catch (error) {
-        console.log('🔍 RBACService: First attempt failed, trying without tenantId:', error.message);
-        roles = await UserRoles.getRolesForUser(userId);
-        console.log('🔍 RBACService: User roles (without tenantId):', roles);
-      }
+      // Get roles with tenantId "public"
+      const roles = await UserRoles.getRolesForUser("public", userId);
+      console.log('🔍 RBACService: User roles:', roles);
       
       return {
         success: true,
@@ -161,16 +155,9 @@ class RBACService {
     try {
       console.log('🔍 RBACService: Getting permissions for user:', userId);
       
-      // Get user roles first - try different API signatures
-      let userRoles;
-      try {
-        userRoles = await UserRoles.getRolesForUser("public", userId);
-        console.log('🔍 RBACService: User roles (with tenantId):', userRoles);
-      } catch (error) {
-        console.log('🔍 RBACService: First attempt failed, trying without tenantId:', error.message);
-        userRoles = await UserRoles.getRolesForUser(userId);
-        console.log('🔍 RBACService: User roles (without tenantId):', userRoles);
-      }
+      // Get user roles first with tenantId "public"
+      const userRoles = await UserRoles.getRolesForUser("public", userId);
+      console.log('🔍 RBACService: User roles:', userRoles);
       
       if (!userRoles || !userRoles.roles || userRoles.roles.length === 0) {
         console.log('🔍 RBACService: No roles found for user');
@@ -221,7 +208,8 @@ class RBACService {
    */
   static async userHasRole(userId, role) {
     try {
-      const roles = await UserRoles.getRolesForUser(userId);
+      // Get roles with tenantId "public"
+      const roles = await UserRoles.getRolesForUser("public", userId);
       const hasRole = roles.roles.includes(role);
       
       return {

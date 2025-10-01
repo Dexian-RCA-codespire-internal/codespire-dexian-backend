@@ -40,6 +40,20 @@ const register = async (req, res) => {
     console.log(response)
     if (response.status === 'OK') {
       try {
+        // Assign default 'user' role to the user in SuperTokens
+        try {
+          const RBACService = require('../services/rbacService');
+          const roleResult = await RBACService.assignRoleToUser(response.user.id, 'user');
+          if (roleResult.success) {
+            console.log('✅ Default user role assigned during registration');
+          } else {
+            console.error('❌ Failed to assign default role during registration:', roleResult.error);
+          }
+        } catch (roleError) {
+          console.error('❌ Error assigning default role during registration:', roleError);
+          // Don't fail registration if role assignment fails, but log it
+        }
+        
         // Create user in our database
         const user = await User.createUser(
           response.user.id, 
@@ -47,8 +61,20 @@ const register = async (req, res) => {
           fullName, 
           firstName, 
           lastName, 
-          phone
+          phone,
+          ['user'], // Default role
+          [] // Permissions will be synced from SuperTokens
         );
+        
+        // Sync roles and permissions from SuperTokens to MongoDB
+        try {
+          await user.syncRolesFromSuperTokens();
+          await user.syncPermissionsFromSuperTokens();
+          console.log('✅ Roles and permissions synced from SuperTokens');
+        } catch (syncError) {
+          console.error('❌ Error syncing roles/permissions:', syncError);
+          // Don't fail registration if sync fails, but log it
+        }
         
         // Send OTP email for verification
         let otpData = null;

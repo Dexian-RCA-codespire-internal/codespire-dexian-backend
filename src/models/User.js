@@ -159,7 +159,8 @@ userSchema.methods.markEmailVerified = function() {
 userSchema.methods.syncRolesFromSuperTokens = async function() {
   try {
     const UserRoles = require('supertokens-node/recipe/userroles');
-    const roles = await UserRoles.getRolesForUser(this.supertokensUserId);
+    // Get roles with tenantId "public"
+    const roles = await UserRoles.getRolesForUser("public", this.supertokensUserId);
     
     this.roles = roles.roles || [];
     
@@ -175,8 +176,8 @@ userSchema.methods.syncPermissionsFromSuperTokens = async function() {
   try {
     const UserRoles = require('supertokens-node/recipe/userroles');
     
-    // Get user roles first
-    const userRoles = await UserRoles.getRolesForUser(this.supertokensUserId);
+    // Get user roles first with tenantId "public"
+    const userRoles = await UserRoles.getRolesForUser("public", this.supertokensUserId);
     const allPermissions = [];
     
     // Get permissions for each role
@@ -222,14 +223,16 @@ userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
   return this.findOne({ supertokensUserId });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
+userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null, roles = ['user'], permissions = []) {
   console.log('User.createUser called with:', {
     supertokensUserId,
     email: email.toLowerCase(),
     name,
     firstName,
     lastName,
-    phone
+    phone,
+    roles,
+    permissions
   });
   
   const user = new this({
@@ -238,7 +241,9 @@ userSchema.statics.createUser = async function(supertokensUserId, email, name, f
     name,
     firstName,
     lastName,
-    phone
+    phone,
+    roles,
+    permissions
   });
   
   console.log('User document created:', user);
