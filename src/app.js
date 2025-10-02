@@ -7,7 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const http = require('http');
-require('dotenv').config();
+require('dotenv').config(); // Load environment variables from .env file
 
 // Initialize Langfuse for observability
 const { initializeLangfuse } = require('./agents/shared/observability/langfuse-simple');

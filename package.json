@@ -9,7 +9,10 @@
     "test": "jest",
     "test:connections": "node src/utils/testConnections.js",
     "upload:tickets": "node scripts/upload-tickets-to-qdrant.js",
-    "test:upload": "node scripts/test-upload-process.js"
+    "test:upload": "node scripts/test-upload-process.js",
+    "docker:dev": "docker-compose up -d",
+    "docker:full": "docker-compose --profile full-stack up -d",
+    "docker:prod": "docker-compose --profile production up -d"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.9.1",

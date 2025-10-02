@@ -123,32 +123,122 @@ function calculateFieldSimilarity(queryTicket, candidateTicket) {
         return intersection.size / union.size;
     };
     
+    // Handle missing descriptions properly
+    const queryHasDescription = queryTicket.description && queryTicket.description.trim().length > 0;
+    const candidateHasDescription = candidateTicket.description && candidateTicket.description.trim().length > 0;
+    
+    let descriptionSimilarity = 0;
+    if (queryHasDescription && candidateHasDescription) {
+        descriptionSimilarity = textSimilarity(queryTicket.description, candidateTicket.description);
+    } else if (!queryHasDescription && !candidateHasDescription) {
+        descriptionSimilarity = 1.0; // Both missing - perfect match
+    } else {
+        descriptionSimilarity = 0.0; // One has, one doesn't - no match
+    }
+    
     return {
         short_description: textSimilarity(queryTicket.short_description, candidateTicket.short_description),
-        description: textSimilarity(queryTicket.description, candidateTicket.description),
-        category: (queryTicket.category === candidateTicket.category) ? 1.0 : 0.0,
-        source: (queryTicket.source === candidateTicket.source) ? 1.0 : 0.0
+        description: descriptionSimilarity,
+        category: (queryTicket.category === candidateTicket.category) ? 1.0 : 0.0
     };
 }
 
 /**
- * Calculate weighted confidence score
+ * Create dynamic weighted text based on available fields
+ * If description is present: use normal weights
+ * If description is missing: give 70% weight to short_description
  */
-function calculateWeightedScore(fieldSimilarities, semanticScore) {
-    const weights = config.textProcessing.fieldWeights;
+function createDynamicWeightedText(ticket) {
+    // Check if description field exists and has content
+    const hasDescription = ticket.description && ticket.description.trim().length > 0;
+    
+    // Get base weights from config
+    const baseWeights = config.textProcessing.fieldWeights;
+    let weights;
+    
+    if (hasDescription) {
+        // Use config weights when description is present
+        weights = {
+            short_description: baseWeights.short_description,
+            description: baseWeights.description,
+            category: baseWeights.category
+        };
+    } else {
+        // Use adjusted weights when description is missing
+        // Give higher weight to short_description, distribute remaining weight
+        const shortDescWeight = baseWeights.short_description + baseWeights.description;
+        weights = {
+            short_description: shortDescWeight,  // Combine short_desc + desc weights
+            description: 0.00,                   // 0% since it's missing
+            category: baseWeights.category       // Keep category weight from config
+        };
+    }
+    
+    // Use shared utility for consistent text processing
+    return createWeightedText(ticket, weights);
+}
+
+/**
+ * Calculate weighted confidence score using dynamic weights
+ */
+function calculateWeightedScore(fieldSimilarities, semanticScore, queryTicket) {
+    // Check if description field exists and has content
+    const hasDescription = queryTicket.description && queryTicket.description.trim().length > 0;
+    
+    // Get base weights from config
+    const baseWeights = config.textProcessing.fieldWeights;
+    let weights;
+    
+    if (hasDescription) {
+        // Use config weights when description is present
+        weights = {
+            short_description: baseWeights.short_description,
+            description: baseWeights.description,
+            category: baseWeights.category
+        };
+    } else {
+        // Use adjusted weights when description is missing
+        // Give higher weight to short_description, distribute remaining weight
+        const shortDescWeight = baseWeights.short_description + baseWeights.description;
+        weights = {
+            short_description: shortDescWeight,  // Combine short_desc + desc weights
+            description: 0.00,                   // 0% since it's missing
+            category: baseWeights.category       // Keep category weight from config
+        };
+    }
     
     // Normalize semantic score to 0-1 range
     const normalizedSemanticScore = Math.max(0, Math.min(1, semanticScore));
     
-    // Calculate field-specific score
+    // Calculate field-specific score using dynamic weights
     const fieldScore = 
         (fieldSimilarities.short_description * weights.short_description) +
         (fieldSimilarities.description * weights.description) +
-        (fieldSimilarities.category * weights.category) +
-        (fieldSimilarities.source * weights.source);
+        (fieldSimilarities.category * weights.category);
     
     // Combine semantic (70%) + field-specific (30%)
     const finalScore = (normalizedSemanticScore * 0.7) + (fieldScore * 0.3);
+    
+    // Enhanced debug logging
+    console.log('🔍 SIMILARITY CALCULATION DEBUG:');
+    console.log('📋 Query Ticket Description Present:', hasDescription);
+    console.log('⚖️  Applied Weights:', weights);
+    console.log('📊 Field Similarities:', {
+        short_description: fieldSimilarities.short_description?.toFixed(3) || '0.000',
+        description: fieldSimilarities.description?.toFixed(3) || '0.000',
+        category: fieldSimilarities.category?.toFixed(3) || '0.000'
+    });
+    console.log('🧮 Score Breakdown:');
+    console.log(`   - Semantic Score: ${normalizedSemanticScore.toFixed(3)} (70% weight)`);
+    console.log(`   - Field Score: ${fieldScore.toFixed(3)} (30% weight)`);
+    console.log(`   - Final Score: ${finalScore.toFixed(3)}`);
+    console.log('📈 Weight Contributions:');
+    for (const [field, weight] of Object.entries(weights)) {
+        const similarity = fieldSimilarities[field] || 0;
+        const contribution = similarity * weight;
+        console.log(`   - ${field}: ${similarity.toFixed(3)} × ${weight.toFixed(2)} = ${contribution.toFixed(3)}`);
+    }
+    console.log('---');
     
     return Math.min(Math.max(finalScore, 0), 1.0);
 }
@@ -184,11 +274,8 @@ async function searchSimilarTickets(queryTicket, options = {}) {
         
         console.log('🔍 Searching for similar tickets...');
         
-        // Create weighted text for embedding using shared utility
-        const queryText = createWeightedText(
-            processedTicket,
-            config.textProcessing.fieldWeights
-        );
+        // Create weighted text for embedding using dynamic weights
+        const queryText = createDynamicWeightedText(processedTicket);
         
         console.log('🔍 Debug: Query text for embedding:', queryText);
         
@@ -214,7 +301,7 @@ async function searchSimilarTickets(queryTicket, options = {}) {
             const fieldSimilarities = calculateFieldSimilarity(queryTicket, candidateTicket);
             
             // Calculate final weighted score
-            const confidence_score = calculateWeightedScore(fieldSimilarities, semanticScore);
+            const confidence_score = calculateWeightedScore(fieldSimilarities, semanticScore, queryTicket);
             
             return {
                 ticket_id: candidateTicket.ticket_id,
