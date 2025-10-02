@@ -45,7 +45,7 @@ function initSuperTokens() {
       apiDomain: process.env.BACKEND_URL || "http://localhost:8081",
       websiteDomain: process.env.FRONTEND_URL || "http://localhost:3001",
       apiBasePath: "/auth",
-      websiteBasePath: "/auth"
+      websiteBasePath: "/"
     },
     recipeList: [
       EmailPassword.init(),

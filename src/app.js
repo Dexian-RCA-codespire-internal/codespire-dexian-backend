@@ -23,7 +23,7 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
-const sessionRemovalDetector = require('./services/sessionRemovalDetector');
+// const sessionRemovalDetector = require('./services/sessionRemovalDetector');
 const appConfig = require('./config');
 
 
@@ -234,21 +234,7 @@ setupSwagger(app, PORT);
 // API routes
 app.use('/api/v1', require('./routes'));
 
-// Note: All authentication is now handled by SuperTokens built-in routes
-// Test routes moved to avoid conflicts with SuperTokens built-in routes
-app.get('/api/v1/test/auth', (req, res) => {
-  res.json({ 
-    message: 'SuperTokens route is working',
-    note: 'Use formFields format for signup: {"formFields":[{"id":"email","value":"user@example.com"},{"id":"password","value":"password123"}]}'
-  });
-});
 
-app.get('/api/v1/test/middleware', (req, res) => {
-  res.json({ 
-    message: 'SuperTokens middleware is working',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Single consolidated session endpoint for SuperTokens compatibility
 app.get('/auth/session', async (req, res) => {
@@ -552,9 +538,9 @@ server.listen(PORT, async () => {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
   }
 
-  // Start session removal detection
-  sessionRemovalDetector.startMonitoring();
-  console.log('✅ Session removal detection started');
+  // // Start session removal detection
+  // sessionRemovalDetector.startMonitoring();
+  // console.log('✅ Session removal detection started');
 });
 
 // SuperTokens error handler (must be last)

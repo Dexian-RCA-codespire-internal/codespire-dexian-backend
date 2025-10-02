@@ -747,9 +747,9 @@ const getCurrentSessionInfo = async (req, res) => {
   }
 };
 
-/**
- * Get current user's active sessions from MongoDB
- */
+// /**
+//  * Get current user's active sessions from MongoDB
+//  */
 const getCurrentUserActiveSessions = async (req, res) => {
   try {
     const userId = req.session.getUserId();
@@ -792,9 +792,9 @@ const getCurrentUserActiveSessions = async (req, res) => {
   }
 };
 
-/**
- * Manually sync user sessions
- */
+// /**
+//  * Manually sync user sessions
+//  */
 const syncUserSessions = async (req, res) => {
   try {
     const userId = req.session.getUserId();

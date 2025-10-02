@@ -283,7 +283,7 @@ class SuperTokensUserService {
       const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, email);
       
       if (tokenRes.status === "OK") {
-        const verificationUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/auth/verify-email?token=${tokenRes.token}`;
+        const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/verify-email?token=${tokenRes.token}`;
         
         const emailService = require('./emailService');
         const emailResult = await emailService.sendMagicLinkEmail(email, email, verificationUrl);

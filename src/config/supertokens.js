@@ -37,7 +37,7 @@ const initSuperTokens = () => {
       websiteDomain: config.supertokens.appDomain,  // http://localhost:3001 (frontend)
       // Use standard SuperTokens paths - these must match exactly
       apiBasePath: '/auth',
-      websiteBasePath: '/auth',
+      websiteBasePath: '/',
     },
     recipeList: [
       // Passwordless recipe for OTP functionality
@@ -242,7 +242,7 @@ const initSuperTokens = () => {
                         const tokenRes = await EmailVerification.createEmailVerificationToken("public", recipeUserId, userEmail);
                         
                         if (tokenRes.status === "OK") {
-                          const magicLinkUrl = `${process.env.BACKEND_URL || 'http://localhost:8081'}/verify-email?token=${tokenRes.token}`;
+                          const magicLinkUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/verify-email?token=${tokenRes.token}`;
                           console.log('📧 Generated magic link URL from user object:', magicLinkUrl);
                           
                           const emailServiceInstance = require('../services/emailService');
