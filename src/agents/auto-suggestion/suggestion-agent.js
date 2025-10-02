@@ -197,6 +197,11 @@ class AutoSuggestionAgent {
      * Generate word completion suggestions
      */
     async generateWordCompletion(currentText, reference) {
+        // Ensure agent is initialized
+        if (!this.initialized) {
+            await this.initialize();
+        }
+        
         const words = currentText.trim().split(' ');
         const incompleteWord = words[words.length - 1];
         const context = words.slice(0, -1).join(' ');
@@ -213,7 +218,15 @@ Rules:
 
 Word completion:`;
 
-        const completion = await llmProvider.generateText(this.llm, prompt);
+        const completion = await llmProvider.generateText(this.llm, prompt, {
+            agentName: 'auto-suggestion',
+            operation: 'generateWordCompletion',
+            metadata: {
+                currentText: currentText?.substring(0, 50) + '...',
+                referenceProvided: !!reference
+            },
+            tags: ['auto-suggestion', 'word-completion']
+        });
         return completion.trim();
     }
 
@@ -235,7 +248,15 @@ Rules:
 
 Continuation:`;
 
-        const completion = await llmProvider.generateText(this.llm, prompt);
+        const completion = await llmProvider.generateText(this.llm, prompt, {
+            agentName: 'auto-suggestion',
+            operation: 'generateSentenceCompletion',
+            metadata: {
+                currentText: currentText?.substring(0, 50) + '...',
+                referenceProvided: !!reference
+            },
+            tags: ['auto-suggestion', 'sentence-completion']
+        });
         return completion.trim();
     }
 
@@ -257,7 +278,15 @@ Rules:
 
 Suggestion:`;
 
-        const suggestion = await llmProvider.generateText(this.llm, prompt);
+        const suggestion = await llmProvider.generateText(this.llm, prompt, {
+            agentName: 'auto-suggestion',
+            operation: 'generateContextAwareSuggestion',
+            metadata: {
+                currentText: currentText?.substring(0, 50) + '...',
+                referenceProvided: !!reference
+            },
+            tags: ['auto-suggestion', 'context-aware']
+        });
         return suggestion.trim();
     }
 
@@ -295,7 +324,15 @@ Rules:
 
 Suggestion:`;
 
-        const suggestion = await llmProvider.generateText(this.llm, prompt);
+        const suggestion = await llmProvider.generateText(this.llm, prompt, {
+            agentName: 'auto-suggestion',
+            operation: 'generateGenericSuggestion',
+            metadata: {
+                currentText: currentText?.substring(0, 50) + '...',
+                lastWords: currentText.toLowerCase().trim().split(' ').slice(-3).join(' ')
+            },
+            tags: ['auto-suggestion', 'generic']
+        });
         return suggestion.trim();
     }
 

@@ -3,9 +3,8 @@
  * Analyzes problem statements and timeline context to determine impact level and affected department
  */
 
-const { LLMManager } = require('../../services/llm');
-const { validateInput } = require('../shared/utils/validation');
-const { formatResponse } = require('../shared/utils/response-formatting');
+const { providers, utils } = require('../shared');
+const llmProvider = providers.llm;
 const {
   IMPACT_LEVELS,
   IMPACT_LEVEL_LIST,
@@ -18,7 +17,33 @@ const {
 class ImpactAssessmentAgent {
   constructor(config) {
     this.config = config;
-    this.llmManager = new LLMManager();
+    this.initialized = false;
+    this.llm = null;
+  }
+
+  /**
+   * Initialize the agent
+   */
+  async initialize() {
+    try {
+      if (this.initialized) {
+        return { success: true, message: 'Agent already initialized' };
+      }
+
+      // Initialize LLM provider using shared module
+      this.llm = llmProvider.createLLM('gemini', {
+        model: this.config.llm.model,
+        temperature: this.config.llm.temperature,
+        maxOutputTokens: this.config.llm.maxTokens
+      });
+      
+      this.initialized = true;
+      console.log('✅ Impact Assessment Agent initialized successfully');
+      return { success: true, message: 'Impact assessment agent initialized successfully' };
+    } catch (error) {
+      console.error('❌ Error initializing impact assessment agent:', error);
+      return { success: false, message: error.message };
+    }
   }
 
   /**
@@ -28,6 +53,11 @@ class ImpactAssessmentAgent {
    */
   async analyzeImpact(input) {
     try {
+      // Initialize if needed
+      if (!this.initialized) {
+        await this.initialize();
+      }
+
       // Validate input
       const validation = this.validateInput(input);
       if (!validation.isValid) {
@@ -43,37 +73,21 @@ class ImpactAssessmentAgent {
       // Create the analysis prompt
       const prompt = this.createAnalysisPrompt(problemStatement, timelineContext);
 
-      // Get LLM response
-      const llmResponse = await this.llmManager.generateResponse(
-        this.config.llm.provider, 
-        prompt, 
-        {
-          temperature: this.config.llm.temperature,
-          maxTokens: this.config.llm.maxTokens
-        }
-      );
-
-      if (!llmResponse.success) {
-        // If API quota exceeded or service unavailable, provide a fallback response
-        if (llmResponse.error && (
-          llmResponse.error.includes('quota') || 
-          llmResponse.error.includes('overloaded') ||
-          llmResponse.error.includes('503') ||
-          llmResponse.error.includes('Service Unavailable')
-        )) {
-          console.log('⚠️ API service unavailable or overloaded, using fallback assessment');
-          return this.generateFallbackAssessment(input);
-        }
-        
-        return {
-          success: false,
-          error: 'Failed to generate impact assessment',
-          details: llmResponse.error
-        };
-      }
+      // Get LLM response using shared provider with Langfuse tracking
+      const response = await llmProvider.generateText(this.llm, prompt, {
+        agentName: 'impact-assessment',
+        operation: 'analyzeImpact',
+        metadata: {
+          hasProblemStatement: !!problemStatement,
+          hasTimelineContext: !!timelineContext,
+          problemLength: problemStatement?.length || 0,
+          timelineLength: timelineContext?.length || 0
+        },
+        tags: ['impact-assessment', 'analysis']
+      });
 
       // Parse and validate the response
-      const parsedResponse = this.parseResponse(llmResponse.response);
+      const parsedResponse = this.parseResponse(response);
       
       if (!parsedResponse.success) {
         return {
@@ -92,6 +106,19 @@ class ImpactAssessmentAgent {
       };
 
     } catch (error) {
+      console.error('❌ Error in impact assessment analysis:', error);
+      
+      // If API quota exceeded or service unavailable, provide a fallback response
+      if (error.message && (
+        error.message.includes('quota') || 
+        error.message.includes('overloaded') ||
+        error.message.includes('503') ||
+        error.message.includes('Service Unavailable')
+      )) {
+        console.log('⚠️ API service unavailable or overloaded, using fallback assessment');
+        return this.generateFallbackAssessment(input);
+      }
+      
       return {
         success: false,
         error: 'Impact assessment analysis failed',

@@ -60,7 +60,16 @@ class RCAGenerationAgent {
                 return await this.generateStreamingRCA(prompt, socketId, 'technical');
             } else {
                 // Generate technical RCA
-                const technicalRCA = await llmProvider.generateText(this.technicalLLM, prompt);
+                const technicalRCA = await llmProvider.generateText(this.technicalLLM, prompt, {
+                    agentName: 'rca-generation',
+                    operation: 'generateTechnicalRCA',
+                    metadata: {
+                        ticketId: ticketData.id || 'unknown',
+                        category: ticketData.category,
+                        hasRcaFields: !!rcaFields
+                    },
+                    tags: ['rca-generation', 'technical', ticketData.category?.toLowerCase()]
+                });
                 
                 return {
                     success: true,
@@ -111,7 +120,16 @@ class RCAGenerationAgent {
                 return await this.generateStreamingSummary(customerPrompt, socketId, 'customer');
             } else {
                 // Generate customer-friendly summary
-                const customerSummary = await llmProvider.generateText(resolutionAgent.llm, customerPrompt);
+                const customerSummary = await llmProvider.generateText(resolutionAgent.llm, customerPrompt, {
+                    agentName: 'rca-generation',
+                    operation: 'generateCustomerSummary',
+                    metadata: {
+                        ticketId: ticketData.id || 'unknown',
+                        category: ticketData.category,
+                        hasTechnicalRCA: !!technicalRCA
+                    },
+                    tags: ['rca-generation', 'customer-summary', ticketData.category?.toLowerCase()]
+                });
                 
                 return {
                     success: true,

@@ -9,7 +9,7 @@ const { config: defaultConfig } = require('../shared');
 const config = defaultConfig.createRAGAgentConfig('ticket-resolution', {
     // LLM settings for resolution analysis
     llm: {
-        model: 'gemini-2.0-flash-exp',
+        model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
         temperature: 0.3,
         maxTokens: 1000
     },
