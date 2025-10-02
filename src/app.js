@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const http = require('http');
-require('dotenv').config();
+// require('dotenv').config(); // Commented out to use Docker environment variables
 
 // Initialize SuperTokens
 const { initSuperTokens } = require('./config/supertokens');
@@ -63,7 +63,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version', 'x-socket-id'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
   optionsSuccessStatus: 200
@@ -102,7 +102,7 @@ app.use((req, res, next) => {
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *               uptime: 3600
  */
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -135,6 +135,9 @@ app.get('/debug/polling', async (req, res) => {
 // Setup Swagger documentation
 const { setupSwagger } = require('./swagger');
 setupSwagger(app, PORT);
+
+// Serve static email assets
+app.use('/email-assets', express.static('public/email-assets'));
 
 // API routes
 app.use('/api/v1', require('./routes'));

@@ -16,7 +16,15 @@ const slaMonitoringRoutes = require('./slaMonitoring');
 const rbacRoutes = require('./rbac');
 const usersRoutes = require('./users');
 
+const rcaGenerationRoutes = require('./rcaGeneration');
+const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
+const problemStatementRoutes = require('./problemStatement');
+const timelineContextRoutes = require('./timelineContext');
+const impactAssessmentRoutes = require('./impactAssessment');
+const textEnhancementRoutes = require('./textEnhancement');
+const rcaRootCauseRoutes = require('./rcaRootCause');
+const solutionGenerationRoutes = require('./solutionGeneration');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -26,11 +34,19 @@ router.use('/tickets', ticketsRoutes);
 router.use('/servicenow-polling', servicenowPollingRoutes);
 router.use('/ticket-similarity', ticketSimilarityRoutes);
 router.use('/tickets', ticketResolutionRoutes);
+router.use('/rca', rcaGenerationRoutes);
+router.use('/auto-suggestion', autoSuggestionRoutes);
 router.use('/chat', chatRoutes);
 router.use('/playbooks', playbookRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/sla', slaRoutes);
 router.use('/sla/monitoring', slaMonitoringRoutes);
+router.use('/problem-statement', problemStatementRoutes);
+router.use('/timeline-context', timelineContextRoutes);
+router.use('/impact-assessment', impactAssessmentRoutes);
+router.use('/text-enhancement', textEnhancementRoutes);
+router.use('/rca-root-cause', rcaRootCauseRoutes);
+router.use('/solution-generation', solutionGenerationRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/users', usersRoutes);
 
@@ -49,11 +65,19 @@ router.get('/', (req, res) => {
       servicenowPolling: '/servicenow-polling',
       ticketSimilarity: '/ticket-similarity',
       ticketResolution: '/tickets/resolve',
+      rcaGeneration: '/rca',
+      autoSuggestion: '/auto-suggestion',
       chat: '/chat',
       notifications: '/notifications',
       playbooks: '/playbooks',
       rbac: '/rbac',
-      users: '/users'
+      users: '/users',
+      problemStatement: '/problem-statement',
+      timelineContext: '/timeline-context',
+      impactAssessment: '/impact-assessment',
+      textEnhancement: '/text-enhancement',
+      rcaRootCause: '/rca-root-cause',
+      solutionGeneration: '/solution-generation'
     },
     documentation: {
       swagger: '/api/docs',

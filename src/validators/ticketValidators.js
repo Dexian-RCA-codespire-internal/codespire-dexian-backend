@@ -278,8 +278,8 @@ const validateUpdateData = (req, res, next) => {
                 'problem_step1',
                 'timeline_step2',
                 'impact_step3',
-                'findings_step4',
-                'root_cause_step5'
+                'root_cause_step4',
+                'corrective_actions_step5'
             ]
         });
     }
