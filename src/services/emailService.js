@@ -35,11 +35,24 @@ class EmailService {
 
   async sendOTPEmail(email, name, otp) {
     try {
+      console.log('🔍 EmailService.sendOTPEmail called with:');
+      console.log('   Email:', email);
+      console.log('   Name:', name);
+      console.log('   OTP:', otp);
+      
       if (!this.transporter) {
+        console.error('❌ Email transporter not initialized');
         throw new Error('Email transporter not initialized');
       }
 
-      console.log(process.env.SMTP_USER, process.env.SMTP_PASSWORD)
+      console.log('🔍 Email configuration:');
+      console.log('   SMTP Host:', config.email.smtp.host);
+      console.log('   SMTP Port:', config.email.smtp.port);
+      console.log('   SMTP User:', process.env.SMTP_USER);
+      console.log('   SMTP Password:', process.env.SMTP_PASSWORD ? '***SET***' : 'NOT SET');
+      console.log('   From Email:', config.email.smtp.fromEmail);
+      console.log('   From Name:', config.email.smtp.fromName);
+      
       const mailOptions = {
         from: `"${config.email.smtp.fromName}" <${config.email.smtp.fromEmail}>`,
         to: email,
@@ -48,15 +61,27 @@ class EmailService {
         text: this.generateOTPEmailText(name, otp)
       };
 
+      console.log('🔄 Sending email with options:', {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject
+      });
+
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ OTP email sent successfully:', result.messageId);
+      console.log('✅ OTP email sent successfully:');
+      console.log('   Message ID:', result.messageId);
+      console.log('   Response:', result.response);
       
       return {
         success: true,
         messageId: result.messageId
       };
     } catch (error) {
-      console.error('❌ Failed to send OTP email:', error);
+      console.error('❌ Failed to send OTP email:');
+      console.error('   Error message:', error.message);
+      console.error('   Error code:', error.code);
+      console.error('   Error response:', error.response);
+      console.error('   Full error:', error);
       return {
         success: false,
         error: error.message

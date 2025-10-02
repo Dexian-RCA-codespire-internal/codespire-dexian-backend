@@ -2,19 +2,20 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { 
-  getUsers,
-  getUserStatsController,
-  getUserByIdController,
-  updateUserStatusController,
-  updateUserRolesController,
-  deleteUserController,
-  createUserController,
+  getUsers, 
+  getUserStatsController, 
+  getUserByIdController, 
+  updateUserStatusController, 
+  updateUserRolesController, 
+  addUserRolesController,
+  deleteUserController, 
+  createUserController, 
   getUserPermissionsController,
   sendUserOTPController,
   verifyUserOTPController,
   resendUserOTPController
 } = require('../controllers/userController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authenticateTokenWithDeactivationCheck } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -48,14 +49,27 @@ const createUserValidation = [
     .withMessage('Roles must be an array'),
   body('roles.*')
     .optional()
-    .isIn(['admin', 'user'])
-    .withMessage('Each role must be either admin or user')
+    .isIn(['admin', 'user', 'viewer', 'manager', 'support_agent', 
+      'dashboard_reader', 'dashboard_editor', 'dashboard_owner',
+      'tickets_reader', 'tickets_editor', 'tickets_owner',
+      'sla_reader', 'sla_editor', 'sla_owner',
+      'playbooks_reader', 'playbooks_editor', 'playbooks_owner',
+      'aiRca_reader', 'aiRca_editor', 'aiRca_owner',
+      'patternDetector_reader', 'patternDetector_editor', 'patternDetector_owner',
+      'playbookRecommender_reader', 'playbookRecommender_editor', 'playbookRecommender_owner',
+      'customerRcaSummary_reader', 'customerRcaSummary_editor', 'customerRcaSummary_owner',
+      'alertCorrelation_reader', 'alertCorrelation_editor', 'alertCorrelation_owner',
+      'complianceAudit_reader', 'complianceAudit_editor', 'complianceAudit_owner',
+      'chatbot_reader', 'chatbot_editor', 'chatbot_owner',
+      'userManagement_reader', 'userManagement_editor', 'userManagement_owner'
+    ])
+    .withMessage('Each role must be a valid role from the system')
 ];
 
 const updateStatusValidation = [
   body('status')
-    .isIn(['active', 'inactive', 'suspended'])
-    .withMessage('Status must be active, inactive, or suspended')
+    .isIn(['active', 'inactive'])
+    .withMessage('Status must be active or inactive')
 ];
 
 const updateRolesValidation = [
@@ -63,8 +77,21 @@ const updateRolesValidation = [
     .isArray({ min: 1 })
     .withMessage('Roles must be a non-empty array'),
   body('roles.*')
-    .isIn(['user', 'admin'])
-    .withMessage('Each role must be either user or admin')
+    .isIn(['admin', 'user', 'viewer', 'manager', 'support_agent', 
+      'dashboard_reader', 'dashboard_editor', 'dashboard_owner',
+      'tickets_reader', 'tickets_editor', 'tickets_owner',
+      'sla_reader', 'sla_editor', 'sla_owner',
+      'playbooks_reader', 'playbooks_editor', 'playbooks_owner',
+      'aiRca_reader', 'aiRca_editor', 'aiRca_owner',
+      'patternDetector_reader', 'patternDetector_editor', 'patternDetector_owner',
+      'playbookRecommender_reader', 'playbookRecommender_editor', 'playbookRecommender_owner',
+      'customerRcaSummary_reader', 'customerRcaSummary_editor', 'customerRcaSummary_owner',
+      'alertCorrelation_reader', 'alertCorrelation_editor', 'alertCorrelation_owner',
+      'complianceAudit_reader', 'complianceAudit_editor', 'complianceAudit_owner',
+      'chatbot_reader', 'chatbot_editor', 'chatbot_owner',
+      'userManagement_reader', 'userManagement_editor', 'userManagement_owner'
+    ])
+    .withMessage('Each role must be a valid role from the system')
 ];
 
 // OTP validation rules
@@ -148,7 +175,7 @@ const resendOTPValidation = [
  *         name: status
  *         schema:
  *           type: string
- *           enum: [active, inactive, suspended, all]
+ *           enum: [active, inactive, all]
  *         description: Filter by status
  *       - in: query
  *         name: sortBy
@@ -181,7 +208,7 @@ const resendOTPValidation = [
  *       500:
  *         description: Internal server error
  */
-router.get('/', authenticateToken, getUsers);
+router.get('/', authenticateTokenWithDeactivationCheck, getUsers);
 
 /**
  * @swagger
@@ -202,7 +229,7 @@ router.get('/', authenticateToken, getUsers);
  *         name: status
  *         schema:
  *           type: string
- *           enum: [active, inactive, suspended, all]
+ *           enum: [active, inactive, all]
  *         description: Filter by status
  *     responses:
  *       200:
@@ -354,7 +381,7 @@ router.post('/', authenticateToken, createUserValidation, createUserController);
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [active, inactive, suspended]
+ *                 enum: [active, inactive]
  *     responses:
  *       200:
  *         description: User status updated successfully
@@ -505,6 +532,12 @@ router.get('/:userId/permissions', authenticateToken, getUserPermissionsControll
  *         description: Internal server error
  */
 router.delete('/:userId', authenticateToken, deleteUserController);
+
+// Add additional roles to user
+router.post('/:userId/roles/add', authenticateToken, [
+  body('roles').isArray().withMessage('Roles must be an array'),
+  body('roles.*').isString().withMessage('Each role must be a string')
+], addUserRolesController);
 
 // OTP Verification Routes
 

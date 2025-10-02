@@ -259,6 +259,68 @@ const initSuperTokens = () => {
                 }
                 
                 return response;
+              },
+              // Block login for deactivated users
+              signInPOST: async function (input) {
+                console.log('🔍 SuperTokens: Login attempt');
+                console.log('   Input email:', input.formFields?.find(f => f.id === 'email')?.value);
+                
+                // First, try the original sign-in
+                console.log('🔄 SuperTokens: Calling original signInPOST...');
+                const response = await originalImplementation.signInPOST(input);
+                console.log('🔍 SuperTokens: Original signInPOST result:');
+                console.log('   Status:', response.status);
+                console.log('   User ID:', response.user?.id);
+                
+                // If login was successful, check if user is deactivated
+                if (response.status === 'OK') {
+                  const userId = response.user.id;
+                  console.log('🔍 SuperTokens: Login successful, checking user status:');
+                  console.log('   User ID:', userId);
+                  
+                  // Check for sessions immediately after login
+                  console.log('🔍 SuperTokens: Checking sessions after login...');
+                  try {
+                    const Session = require('supertokens-node/recipe/session');
+                    const sessionHandles = await Session.getAllSessionHandlesForUser(userId);
+                    console.log('🔍 SuperTokens: Sessions found after login:', sessionHandles.length);
+                    console.log('   Session handles:', sessionHandles);
+                  } catch (sessionError) {
+                    console.error('❌ SuperTokens: Error checking sessions after login:', sessionError);
+                  }
+                  
+                  try {
+                    console.log('🔄 SuperTokens: Fetching user metadata...');
+                    const { metadata } = await UserMetadata.getUserMetadata(userId);
+                    console.log('🔍 SuperTokens: User metadata retrieved:');
+                    console.log('   Metadata:', metadata);
+                    console.log('   isDeactivated:', metadata?.isDeactivated);
+                    
+                    if (metadata?.isDeactivated === true) {
+                      console.log('❌ SuperTokens: User is deactivated - blocking login');
+                      console.log('   Returning WRONG_CREDENTIALS_ERROR to hide deactivation');
+                      return {
+                        status: 'WRONG_CREDENTIALS_ERROR',
+                        message: 'Account deactivated'
+                      };
+                    }
+                    
+                    console.log('✅ SuperTokens: User is active - login allowed');
+                  } catch (metadataError) {
+                    console.error('❌ SuperTokens: Error checking user metadata during login:');
+                    console.error('   Error message:', metadataError.message);
+                    console.error('   Error stack:', metadataError.stack);
+                    console.error('   Full error:', metadataError);
+                    // If we can't check metadata, allow the login to continue
+                    // This prevents blocking users due to metadata service issues
+                    console.log('⚠️ SuperTokens: Allowing login to continue due to metadata error');
+                  }
+                } else {
+                  console.log('⚠️ SuperTokens: Login failed with status:', response.status);
+                }
+                
+                console.log('✅ SuperTokens: Login process completed');
+                return response;
               }
             };
           }
@@ -268,6 +330,67 @@ const initSuperTokens = () => {
         cookieDomain: process.env.NODE_ENV === 'production' ? config.supertokens.appDomain : undefined,
         cookieSecure: process.env.NODE_ENV === 'production',
         cookieSameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        override: {
+          apis: (originalImplementation) => {
+            return {
+              ...originalImplementation,
+              // Block session refresh for deactivated users
+              refreshPOST: async function (input) {
+                console.log('🔍 SuperTokens: Session refresh attempt');
+                console.log('   Input:', input);
+                
+                // First, try to refresh the session
+                console.log('🔄 SuperTokens: Calling original refreshPOST...');
+                const session = await originalImplementation.refreshPOST(input);
+                console.log('🔍 SuperTokens: Original refreshPOST result:', session ? 'Session created' : 'No session');
+                
+                if (session) {
+                  const userId = session.getUserId();
+                  console.log('🔍 SuperTokens: Session details:');
+                  console.log('   User ID:', userId);
+                  console.log('   Session handle:', session.getHandle());
+                  
+                  // Check if user is deactivated in SuperTokens metadata
+                  console.log('🔄 SuperTokens: Checking user metadata for deactivation...');
+                  try {
+                    const { metadata } = await UserMetadata.getUserMetadata(userId);
+                    console.log('🔍 SuperTokens: User metadata retrieved:');
+                    console.log('   Metadata:', metadata);
+                    console.log('   isDeactivated:', metadata?.isDeactivated);
+                    
+                    if (metadata?.isDeactivated === true) {
+                      console.log('❌ SuperTokens: User is deactivated - revoking session');
+                      console.log('   Session handle to revoke:', session.getHandle());
+                      
+                      await session.revokeSession();
+                      console.log('✅ SuperTokens: Session revoked successfully');
+                      
+                      throw new Session.Error({
+                        type: Session.Error.UNAUTHORISED,
+                        message: "Account deactivated"
+                      });
+                    }
+                    
+                    console.log('✅ SuperTokens: User is active - session refresh allowed');
+                  } catch (metadataError) {
+                    console.error('❌ SuperTokens: Error checking user metadata:');
+                    console.error('   Error message:', metadataError.message);
+                    console.error('   Error stack:', metadataError.stack);
+                    console.error('   Full error:', metadataError);
+                    // If we can't check metadata, allow the session to continue
+                    // This prevents blocking users due to metadata service issues
+                    console.log('⚠️ SuperTokens: Allowing session to continue due to metadata error');
+                  }
+                } else {
+                  console.log('⚠️ SuperTokens: No session returned from original refreshPOST');
+                }
+                
+                console.log('✅ SuperTokens: Session refresh process completed');
+                return session;
+              }
+            };
+          }
+        }
       }),
       UserMetadata.init(),
       UserRoles.init({

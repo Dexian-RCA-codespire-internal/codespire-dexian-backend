@@ -5,6 +5,7 @@ const {
   getUserById, 
   updateUserStatus, 
   updateUserRoles, 
+  addUserRoles,
   deleteUser, 
   createUser 
 } = require('../services/userService');
@@ -149,10 +150,19 @@ async function getUserByIdController(req, res) {
  */
 async function updateUserStatusController(req, res) {
     try {
+      console.log('🔍 Backend Controller: updateUserStatusController called');
+      console.log('   Request params:', req.params);
+      console.log('   Request body:', req.body);
+      
       const { userId } = req.params;
       const { status } = req.body;
 
+      console.log('🔍 Backend Controller: Extracted data:');
+      console.log('   User ID:', userId);
+      console.log('   Status:', status);
+
       if (!userId) {
+        console.log('❌ Backend Controller: User ID is missing');
         return res.status(400).json({
           success: false,
           error: 'User ID is required',
@@ -161,6 +171,7 @@ async function updateUserStatusController(req, res) {
       }
 
       if (!status) {
+        console.log('❌ Backend Controller: Status is missing');
         return res.status(400).json({
           success: false,
           error: 'Status is required',
@@ -168,11 +179,20 @@ async function updateUserStatusController(req, res) {
         });
       }
 
+      console.log('🔄 Backend Controller: Calling updateUserStatus service...');
       const result = await updateUserStatus(userId, status);
+      console.log('🔍 Backend Controller: Service result:');
+      console.log('   Success:', result.success);
+      console.log('   Message:', result.message);
+      console.log('   Full result:', result);
 
       if (result.success) {
+        console.log('✅ Backend Controller: User status updated successfully');
+        console.log('🔄 Backend Controller: Emitting WebSocket event...');
+        
         // Emit WebSocket event for real-time update
         webSocketService.emitUserUpdate(result.data, 'user_updated');
+        console.log('✅ Backend Controller: WebSocket event emitted');
 
         res.json({
           success: true,
@@ -180,7 +200,9 @@ async function updateUserStatusController(req, res) {
           message: result.message,
           timestamp: new Date().toISOString()
         });
+        console.log('✅ Backend Controller: Response sent successfully');
       } else {
+        console.log('❌ Backend Controller: User status update failed');
         res.status(400).json({
           success: false,
           error: result.error,
@@ -188,14 +210,17 @@ async function updateUserStatusController(req, res) {
         });
       }
     } catch (error) {
-      console.error('Error in updateUserStatus controller:', error);
+      console.error('❌ Backend Controller: Error in updateUserStatus controller:');
+      console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
+      console.error('   Full error:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error',
         timestamp: new Date().toISOString()
       });
     }
-}
+  }
 
 /**
  * Update user roles
@@ -204,10 +229,18 @@ async function updateUserStatusController(req, res) {
  */
 async function updateUserRolesController(req, res) {
     try {
+      console.log('🔍 updateUserRolesController called');
+      console.log('   Request params:', req.params);
+      console.log('   Request body:', req.body);
+      
       const { userId } = req.params;
       const { roles } = req.body;
 
+      console.log('   Extracted userId:', userId);
+      console.log('   Extracted roles:', roles);
+
       if (!userId) {
+        console.log('❌ User ID is missing');
         return res.status(400).json({
           success: false,
           error: 'User ID is required',
@@ -216,6 +249,7 @@ async function updateUserRolesController(req, res) {
       }
 
       if (!roles || !Array.isArray(roles)) {
+        console.log('❌ Roles array is missing or invalid');
         return res.status(400).json({
           success: false,
           error: 'Roles array is required',
@@ -223,7 +257,9 @@ async function updateUserRolesController(req, res) {
         });
       }
 
+      console.log('🔄 Calling updateUserRoles service...');
       const result = await updateUserRoles(userId, roles);
+      console.log('   Service result:', result);
 
       if (result.success) {
         // Emit WebSocket event for real-time update
@@ -304,8 +340,12 @@ async function deleteUserController(req, res) {
  */
 async function createUserController(req, res) {
     try {
+      console.log('🔍 createUserController called');
+      console.log('   Request body:', req.body);
+      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('❌ Validation errors:', errors.array());
         return res.status(400).json({
           success: false,
           error: 'Validation failed',
@@ -315,7 +355,9 @@ async function createUserController(req, res) {
       }
 
       const { email, password, firstName, lastName, phone, roles } = req.body;
+      console.log('   Extracted data:', { email, firstName, lastName, phone, roles });
 
+      console.log('🔄 Calling createUser service...');
       const result = await createUser({
         email,
         password,
@@ -324,8 +366,13 @@ async function createUserController(req, res) {
         phone,
         roles // Accept roles from frontend
       });
+      console.log('   Service result:', result);
 
       if (result.success) {
+        console.log('✅ User created successfully');
+        console.log('   OTP Data:', result.otpData);
+        console.log('   Message:', result.message);
+        
         // Emit WebSocket event for real-time update
         webSocketService.emitUserUpdate(result.data, 'user_created');
 
@@ -333,9 +380,11 @@ async function createUserController(req, res) {
           success: true,
           data: result.data,
           message: result.message,
+          otpData: result.otpData, // Include OTP data in response
           timestamp: new Date().toISOString()
         });
       } else {
+        console.log('❌ User creation failed:', result.error);
         res.status(400).json({
           success: false,
           error: result.error,
@@ -343,14 +392,14 @@ async function createUserController(req, res) {
         });
       }
     } catch (error) {
-      console.error('Error in createUser controller:', error);
+      console.error('❌ Error in createUser controller:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error',
         timestamp: new Date().toISOString()
       });
     }
-}
+  }
 
 /**
  * Get user permissions
@@ -526,12 +575,74 @@ async function resendUserOTPController(req, res) {
   }
 }
 
+/**
+ * Add additional roles to user
+ */
+async function addUserRolesController(req, res) {
+  try {
+    console.log('🔍 addUserRolesController called');
+    console.log('   Request params:', req.params);
+    console.log('   Request body:', req.body);
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { userId } = req.params;
+    const { roles } = req.body;
+
+    console.log('   Extracted userId:', userId);
+    console.log('   Extracted roles:', roles);
+
+    if (!roles || !Array.isArray(roles) || roles.length === 0) {
+      console.log('❌ Roles array is missing, invalid, or empty');
+      return res.status(400).json({
+        success: false,
+        error: 'Roles array is required and must not be empty'
+      });
+    }
+
+    console.log('🔄 Calling addUserRoles service...');
+    const result = await addUserRoles(userId, roles);
+    console.log('   Service result:', result);
+
+    if (result.success) {
+      // Emit WebSocket event for real-time updates
+      webSocketService.emitUserUpdate(result.data, 'user_updated');
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Add user roles error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+}
+
 module.exports = {
   getUsers,
   getUserStatsController,
   getUserByIdController,
   updateUserStatusController,
   updateUserRolesController,
+  addUserRolesController,
   deleteUserController,
   createUserController,
   getUserPermissionsController,

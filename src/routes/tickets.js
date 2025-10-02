@@ -6,14 +6,14 @@
 const express = require('express');
 const { getTickets, getTicket, getTicketStatistics, updateTicket } = require('../controllers/ticketsController');
 const { validateTicketUpdate, validateUpdateData } = require('../validators/ticketValidators');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, authenticateTokenWithDeactivationCheck, requirePermission } = require('../middleware/auth');
 const { doc, params } = require('../utils/apiDoc');
 
 const router = express.Router();
 
 // Get all tickets with filtering and pagination
 router.get('/', 
-  authenticateToken,
+  authenticateTokenWithDeactivationCheck,
   requirePermission('tickets:read'),
   doc.getList('/tickets', 'Retrieve all tickets from ServiceNow with pagination', ['Tickets']),
   getTickets);

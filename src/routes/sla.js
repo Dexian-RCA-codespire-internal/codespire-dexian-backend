@@ -6,14 +6,14 @@
 const express = require('express');
 const { getSLAs, getSLAByTicket, getSLAStatistics, deleteSLA } = require('../controllers/slaController');
 const { validateSLAQuery, validateSLAByTicket, validateDateRange } = require('../validators/slaValidators');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, authenticateTokenWithDeactivationCheck, requirePermission } = require('../middleware/auth');
 const { doc } = require('../utils/apiDoc');
 
 const router = express.Router();
 
 // Get all SLA records with filtering and pagination
 router.get('/', 
-  authenticateToken,
+  authenticateTokenWithDeactivationCheck,
   requirePermission('sla:read'),
   doc.getList('/sla', 'Retrieve all SLA records with pagination and filtering', ['SLA']),
   validateSLAQuery,

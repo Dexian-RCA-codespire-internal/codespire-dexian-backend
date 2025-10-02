@@ -146,18 +146,26 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // SuperTokens handles authentication
+    console.log('🔍 Auth Controller: Login attempt for:', email);
     const response = await signIn('public', email, password);
+    console.log('🔍 Auth Controller: SuperTokens signIn result:', response.status);
     
     if (response.status === 'OK') {
+      console.log('🔍 Auth Controller: Login successful, user ID:', response.user.id);
+      
       // Get user from our database
       const user = await User.findBySupertokensUserId(response.user.id);
+      console.log('🔍 Auth Controller: User found in database:', !!user);
       
       if (!user) {
+        console.log('❌ Auth Controller: User not found in database');
         return res.status(401).json({ error: 'User not found in database' });
       }
 
+      console.log('🔍 Auth Controller: User status:', user.status);
       // Check if user is active
       if (user.status !== 'active') {
+        console.log('❌ Auth Controller: User is not active, status:', user.status);
         return res.status(403).json({ 
           error: 'Account suspended',
           message: 'Your account has been suspended. Please contact support.'
@@ -179,7 +187,19 @@ const login = async (req, res) => {
       // Get user metadata from SuperTokens
       const userMetadata = await UserMetadata.getUserMetadata(response.user.id);
       
+      // Check for active sessions after login
+      console.log('🔍 Auth Controller: Checking active sessions after login...');
+      try {
+        const Session = require('supertokens-node/recipe/session');
+        const sessionHandles = await Session.getAllSessionHandlesForUser(response.user.id);
+        console.log('🔍 Auth Controller: Active sessions found:', sessionHandles.length);
+        console.log('   Session handles:', sessionHandles);
+      } catch (sessionError) {
+        console.error('❌ Auth Controller: Error checking sessions:', sessionError);
+      }
+      
       // Login successful
+      console.log('✅ Auth Controller: Login successful, sending response');
       res.json({
         message: 'Login successful',
         user: {

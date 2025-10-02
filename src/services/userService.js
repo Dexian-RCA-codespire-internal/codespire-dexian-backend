@@ -255,14 +255,18 @@ async function getUserById(userId) {
  */
 async function updateUserStatus(userId, status) {
     try {
-      const validStatuses = ['active', 'inactive', 'suspended'];
+      console.log('🔄 Updating user status:', { userId, status });
+      
+      const validStatuses = ['active', 'inactive'];
       if (!validStatuses.includes(status)) {
         return {
           success: false,
-          error: 'Invalid status. Must be one of: active, inactive, suspended'
+          error: 'Invalid status. Must be one of: active, inactive'
         };
       }
 
+      // 1. Update MongoDB status
+      console.log('🔄 Updating MongoDB status...');
       const user = await User.findByIdAndUpdate(
         userId,
         { status },
@@ -276,19 +280,138 @@ async function updateUserStatus(userId, status) {
         };
       }
 
+      // 2. Update SuperTokens metadata
+      console.log('🔄 Updating SuperTokens metadata...');
+      const UserMetadata = require('supertokens-node/recipe/usermetadata');
+      const isDeactivated = status === 'inactive';
+      
+      try {
+        await UserMetadata.updateUserMetadata(user.supertokensUserId, { 
+          isDeactivated: isDeactivated 
+        });
+        console.log('✅ SuperTokens metadata updated successfully');
+      } catch (metadataError) {
+        console.error('❌ Failed to update SuperTokens metadata:', metadataError);
+        // Continue even if metadata update fails - MongoDB is updated
+      }
+
+      // 3. If deactivating, revoke all active sessions
+      if (isDeactivated) {
+        console.log('🔄 User being deactivated - revoking all sessions...');
+        try {
+          const revokeResult = await revokeAllUserSessions(user.supertokensUserId);
+          if (revokeResult.success) {
+            console.log(`✅ Revoked ${revokeResult.revokedCount} sessions for user ${user.supertokensUserId}`);
+          } else {
+            console.error('❌ Failed to revoke sessions:', revokeResult.error);
+          }
+        } catch (revokeError) {
+          console.error('❌ Error revoking sessions:', revokeError);
+          // Continue even if session revocation fails
+        }
+      }
+
       return {
         success: true,
         data: user,
-        message: `User status updated to ${status}`
+        message: `User status updated to ${status}${isDeactivated ? ' and all sessions revoked' : ''}`
       };
 
     } catch (error) {
-      console.error('Error updating user status:', error);
+      console.error('❌ Error updating user status:', error);
       return {
         success: false,
         error: error.message
       };
     }
+  }
+
+/**
+ * Check active sessions for a user (debug function)
+ * @param {String} supertokensUserId - SuperTokens User ID
+ * @returns {Object} Session check result
+ */
+async function checkUserSessions(supertokensUserId) {
+  try {
+    console.log('🔍 Checking sessions for user:', supertokensUserId);
+    
+    const Session = require('supertokens-node/recipe/session');
+    
+    // Get all session handles for the user
+    const sessionHandles = await Session.getAllSessionHandlesForUser(supertokensUserId);
+    console.log(`   Found ${sessionHandles.length} active sessions`);
+    console.log('   Session handles:', sessionHandles);
+    
+    return {
+      success: true,
+      sessionCount: sessionHandles.length,
+      sessionHandles: sessionHandles,
+      message: `Found ${sessionHandles.length} active sessions`
+    };
+    
+  } catch (error) {
+    console.error('❌ Error checking user sessions:', error);
+    return {
+      success: false,
+      error: error.message,
+      sessionCount: 0
+    };
+  }
+}
+
+/**
+ * Revoke all active sessions for a user
+ * @param {String} supertokensUserId - SuperTokens User ID
+ * @returns {Object} Revocation result
+ */
+async function revokeAllUserSessions(supertokensUserId) {
+  try {
+    console.log('🔄 Revoking all sessions for user:', supertokensUserId);
+    
+    const Session = require('supertokens-node/recipe/session');
+    
+    // Get all session handles for the user
+    const sessionHandles = await Session.getAllSessionHandlesForUser(supertokensUserId);
+    console.log(`   Found ${sessionHandles.length} active sessions`);
+    
+    if (sessionHandles.length === 0) {
+      console.log('✅ No active sessions to revoke');
+      return {
+        success: true,
+        revokedCount: 0,
+        message: 'No active sessions found'
+      };
+    }
+    
+    // Revoke all sessions
+    let revokedCount = 0;
+    for (const sessionHandle of sessionHandles) {
+      try {
+        await Session.revokeSession(sessionHandle);
+        revokedCount++;
+        console.log(`   ✅ Revoked session: ${sessionHandle}`);
+      } catch (revokeError) {
+        console.error(`   ❌ Failed to revoke session ${sessionHandle}:`, revokeError);
+      }
+    }
+    
+    console.log(`✅ Successfully revoked ${revokedCount}/${sessionHandles.length} sessions`);
+    
+    return {
+      success: true,
+      revokedCount: revokedCount,
+      totalSessions: sessionHandles.length,
+      message: `Revoked ${revokedCount} out of ${sessionHandles.length} sessions`
+    };
+    
+  } catch (error) {
+    console.error('❌ Error revoking user sessions:', error);
+    return {
+      success: false,
+      error: error.message,
+      revokedCount: 0
+    };
+  }
 }
 
 /**
@@ -299,7 +422,25 @@ async function updateUserStatus(userId, status) {
  */
 async function updateUserRoles(userId, roles) {
     try {
-      const validRoles = ['user', 'admin'];
+      console.log('🔍 updateUserRoles called with:');
+      console.log('   userId:', userId, '(type:', typeof userId, ')');
+      console.log('   roles:', roles, '(type:', typeof roles, ')');
+      
+      // Updated to support all roles from permissions.js
+      const validRoles = ['admin', 'user', 'viewer', 'manager', 'support_agent', 
+        'dashboard_reader', 'dashboard_editor', 'dashboard_owner',
+        'tickets_reader', 'tickets_editor', 'tickets_owner',
+        'sla_reader', 'sla_editor', 'sla_owner',
+        'playbooks_reader', 'playbooks_editor', 'playbooks_owner',
+        'aiRca_reader', 'aiRca_editor', 'aiRca_owner',
+        'patternDetector_reader', 'patternDetector_editor', 'patternDetector_owner',
+        'playbookRecommender_reader', 'playbookRecommender_editor', 'playbookRecommender_owner',
+        'customerRcaSummary_reader', 'customerRcaSummary_editor', 'customerRcaSummary_owner',
+        'alertCorrelation_reader', 'alertCorrelation_editor', 'alertCorrelation_owner',
+        'complianceAudit_reader', 'complianceAudit_editor', 'complianceAudit_owner',
+        'chatbot_reader', 'chatbot_editor', 'chatbot_owner',
+        'userManagement_reader', 'userManagement_editor', 'userManagement_owner'
+      ];
       const invalidRoles = roles.filter(role => !validRoles.includes(role));
       
       if (invalidRoles.length > 0) {
@@ -309,6 +450,127 @@ async function updateUserRoles(userId, roles) {
         };
       }
 
+      // Get user from MongoDB to get SuperTokens ID
+      console.log('🔍 Looking up user in MongoDB with ID:', userId);
+      const user = await User.findById(userId);
+      
+      if (!user) {
+        console.log('❌ User not found in MongoDB with ID:', userId);
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+
+      const supertokensUserId = user.supertokensUserId;
+      console.log('✅ User found in MongoDB:');
+      console.log('   MongoDB ID:', user._id);
+      console.log('   SuperTokens ID:', supertokensUserId);
+      console.log('   User email:', user.email);
+      console.log('   Current MongoDB roles:', user.roles);
+      
+      // Import RBACService for proper role management
+      const RBACService = require('./rbacService');
+      const UserRoles = require('supertokens-node/recipe/userroles');
+      
+      // Get current roles from SuperTokens
+      console.log('🔍 Getting current roles from SuperTokens...');
+      const currentRolesResult = await RBACService.getUserRoles(supertokensUserId);
+      console.log('🔍 SuperTokens getUserRoles result:', currentRolesResult);
+      const currentRoles = currentRolesResult.success ? currentRolesResult.roles : [];
+      
+      console.log(`🔄 Updating roles for user ${userId} (${supertokensUserId})`);
+      console.log(`   Current SuperTokens roles: ${currentRoles.join(', ')}`);
+      console.log(`   New roles to set: ${roles.join(', ')}`);
+      
+      // Determine roles to add and remove
+      const rolesToAdd = roles.filter(role => !currentRoles.includes(role));
+      const rolesToRemove = currentRoles.filter(role => !roles.includes(role));
+      
+      console.log(`   Roles to add: ${rolesToAdd.join(', ') || 'none'}`);
+      console.log(`   Roles to remove: ${rolesToRemove.join(', ') || 'none'}`);
+      
+      // Remove roles that are no longer needed
+      console.log('🔄 Removing roles from SuperTokens...');
+      for (const role of rolesToRemove) {
+        console.log(`   Removing role: ${role}`);
+        const removeResult = await RBACService.removeRoleFromUser(supertokensUserId, role);
+        console.log(`   Remove result for ${role}:`, removeResult);
+        if (!removeResult.success) {
+          console.error(`❌ Failed to remove role ${role}:`, removeResult.error);
+        } else {
+          console.log(`✅ Removed role ${role} from SuperTokens`);
+        }
+      }
+      
+      // Add new roles
+      console.log('🔄 Adding roles to SuperTokens...');
+      for (const role of rolesToAdd) {
+        console.log(`   Adding role: ${role}`);
+        const addResult = await RBACService.assignRoleToUser(supertokensUserId, role);
+        console.log(`   Add result for ${role}:`, addResult);
+        if (!addResult.success) {
+          console.error(`❌ Failed to add role ${role}:`, addResult.error);
+        } else {
+          console.log(`✅ Added role ${role} to SuperTokens`);
+        }
+      }
+      
+      // Sync roles and permissions from SuperTokens to MongoDB
+      console.log('🔄 Syncing roles and permissions from SuperTokens to MongoDB...');
+      try {
+        // Get fresh user data to avoid version conflicts
+        const freshUser = await User.findById(userId);
+        if (freshUser) {
+          console.log('   Syncing roles...');
+          const rolesSyncResult = await freshUser.syncRolesFromSuperTokens();
+          console.log('   Roles sync result:', rolesSyncResult);
+          
+          console.log('   Syncing permissions...');
+          const permissionsSyncResult = await freshUser.syncPermissionsFromSuperTokens();
+          console.log('   Permissions sync result:', permissionsSyncResult);
+        }
+      } catch (syncError) {
+        console.error('❌ Error syncing from SuperTokens:', syncError.message);
+        // Continue even if sync fails - roles are already in SuperTokens
+      }
+      
+      // Reload user to get updated data
+      console.log('🔄 Reloading user from MongoDB...');
+      const updatedUser = await User.findById(userId)
+        .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry');
+
+      console.log('✅ User roles updated successfully:');
+      console.log('   Final MongoDB roles:', updatedUser.roles);
+      console.log('   Final MongoDB permissions:', updatedUser.permissions);
+
+      return {
+        success: true,
+        data: updatedUser,
+        message: `User roles updated to ${updatedUser.roles.join(', ')}`
+      };
+
+    } catch (error) {
+      console.error('Error updating user roles:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+}
+
+/**
+ * Add additional roles to existing user
+ * @param {String} userId - MongoDB User ID
+ * @param {Array} additionalRoles - Additional roles to add
+ * @returns {Object} Update result
+ */
+async function addUserRoles(userId, additionalRoles) {
+    try {
+      console.log('🔍 addUserRoles called with:');
+      console.log('   userId:', userId, '(type:', typeof userId, ')');
+      console.log('   additionalRoles:', additionalRoles, '(type:', typeof additionalRoles, ')');
+      
       // Get user from MongoDB to get SuperTokens ID
       const user = await User.findById(userId);
       
@@ -323,32 +585,27 @@ async function updateUserRoles(userId, roles) {
       
       // Import RBACService for proper role management
       const RBACService = require('./rbacService');
-      const UserRoles = require('supertokens-node/recipe/userroles');
       
       // Get current roles from SuperTokens
       const currentRolesResult = await RBACService.getUserRoles(supertokensUserId);
       const currentRoles = currentRolesResult.success ? currentRolesResult.roles : [];
       
-      console.log(`🔄 Updating roles for user ${userId} (${supertokensUserId})`);
+      console.log(`🔄 Adding roles to user ${userId} (${supertokensUserId})`);
       console.log(`   Current roles: ${currentRoles.join(', ')}`);
-      console.log(`   New roles: ${roles.join(', ')}`);
+      console.log(`   Additional roles to add: ${additionalRoles.join(', ')}`);
       
-      // Determine roles to add and remove
-      const rolesToAdd = roles.filter(role => !currentRoles.includes(role));
-      const rolesToRemove = currentRoles.filter(role => !roles.includes(role));
+      // Filter out roles that user already has
+      const rolesToAdd = additionalRoles.filter(role => !currentRoles.includes(role));
       
-      console.log(`   Roles to add: ${rolesToAdd.join(', ') || 'none'}`);
-      console.log(`   Roles to remove: ${rolesToRemove.join(', ') || 'none'}`);
-      
-      // Remove roles that are no longer needed
-      for (const role of rolesToRemove) {
-        const removeResult = await RBACService.removeRoleFromUser(supertokensUserId, role);
-        if (!removeResult.success) {
-          console.error(`❌ Failed to remove role ${role}:`, removeResult.error);
-        } else {
-          console.log(`✅ Removed role ${role} from SuperTokens`);
-        }
+      if (rolesToAdd.length === 0) {
+        return {
+          success: true,
+          message: 'User already has all the specified roles',
+          data: user
+        };
       }
+      
+      console.log(`   New roles to add: ${rolesToAdd.join(', ') || 'none'}`);
       
       // Add new roles
       for (const role of rolesToAdd) {
@@ -361,23 +618,38 @@ async function updateUserRoles(userId, roles) {
       }
       
       // Sync roles and permissions from SuperTokens to MongoDB
-      await user.syncRolesFromSuperTokens();
-      await user.syncPermissionsFromSuperTokens();
+      console.log('🔄 Syncing roles and permissions from SuperTokens to MongoDB...');
+      try {
+        // Get fresh user data to avoid version conflicts
+        const freshUser = await User.findById(userId);
+        if (freshUser) {
+          console.log('   Syncing roles...');
+          const rolesSyncResult = await freshUser.syncRolesFromSuperTokens();
+          console.log('   Roles sync result:', rolesSyncResult);
+          
+          console.log('   Syncing permissions...');
+          const permissionsSyncResult = await freshUser.syncPermissionsFromSuperTokens();
+          console.log('   Permissions sync result:', permissionsSyncResult);
+        }
+      } catch (syncError) {
+        console.error('❌ Error syncing from SuperTokens:', syncError.message);
+        // Continue even if sync fails - roles are already in SuperTokens
+      }
       
       // Reload user to get updated data
       const updatedUser = await User.findById(userId)
         .select('-emailVerificationOTP -passwordResetOTP -passwordResetToken -otp -otpExpiry -magicLinkToken -magicLinkExpiry');
 
-      console.log(`✅ User roles updated successfully to: ${updatedUser.roles.join(', ')}`);
+      console.log(`✅ Additional roles added successfully. User now has: ${updatedUser.roles.join(', ')}`);
 
       return {
         success: true,
         data: updatedUser,
-        message: `User roles updated to ${updatedUser.roles.join(', ')}`
+        message: `Additional roles added: ${rolesToAdd.join(', ')}`
       };
 
     } catch (error) {
-      console.error('Error updating user roles:', error);
+      console.error('Error adding user roles:', error);
       return {
         success: false,
         error: error.message
@@ -437,7 +709,7 @@ async function deleteUser(userId) {
  */
 async function createUser(userData) {
     try {
-      const { email, password, firstName, lastName, phone, roles = ['user'] } = userData;
+      const { email, password, firstName, lastName, phone, roles = ['viewer'] } = userData;
 
       // Validate required fields
       if (!email || !password) {
@@ -483,16 +755,29 @@ async function createUser(userData) {
       await UserMetadata.updateUserMetadata(supertokensUserId, userMetadata);
 
       // Assign roles to user in SuperTokens
-      // Validate roles first
+      // Validate roles first - now includes all roles from permissions.js
       const UserRoles = require('supertokens-node/recipe/userroles');
-      const validRoles = ['admin', 'user'];
+      const validRoles = ['admin', 'user', 'viewer', 'manager', 'support_agent', 
+        'dashboard_reader', 'dashboard_editor', 'dashboard_owner',
+        'tickets_reader', 'tickets_editor', 'tickets_owner',
+        'sla_reader', 'sla_editor', 'sla_owner',
+        'playbooks_reader', 'playbooks_editor', 'playbooks_owner',
+        'aiRca_reader', 'aiRca_editor', 'aiRca_owner',
+        'patternDetector_reader', 'patternDetector_editor', 'patternDetector_owner',
+        'playbookRecommender_reader', 'playbookRecommender_editor', 'playbookRecommender_owner',
+        'customerRcaSummary_reader', 'customerRcaSummary_editor', 'customerRcaSummary_owner',
+        'alertCorrelation_reader', 'alertCorrelation_editor', 'alertCorrelation_owner',
+        'complianceAudit_reader', 'complianceAudit_editor', 'complianceAudit_owner',
+        'chatbot_reader', 'chatbot_editor', 'chatbot_owner',
+        'userManagement_reader', 'userManagement_editor', 'userManagement_owner'
+      ];
       const rolesToAssign = roles && Array.isArray(roles) && roles.length > 0 
         ? roles.filter(role => validRoles.includes(role))
         : [];
       
-      // Default to 'user' role if no valid roles provided
+      // Default to 'viewer' role if no valid roles provided
       if (rolesToAssign.length === 0) {
-        rolesToAssign.push('user');
+        rolesToAssign.push('viewer');
       }
       
       console.log(`🔐 Roles to assign: ${rolesToAssign.join(', ')}`);
@@ -560,14 +845,31 @@ async function createUser(userData) {
         // Send OTP for email verification using the user object directly
         let otpData = null;
         try {
-          console.log('Sending OTP for email verification to:', email);
+          console.log('🔍 Starting OTP sending process...');
+          console.log('   User email:', email);
+          console.log('   User name:', user.name);
+          console.log('   User ID:', user._id);
           
           // Generate OTP and send using the user object we just created
+          console.log('🔄 Generating OTP...');
           const otp = user.generateOTP();
+          console.log('   Generated OTP:', otp);
+          console.log('   OTP expiry:', user.emailVerificationOTP?.expiresAt);
+          
+          console.log('🔄 Saving user with OTP...');
           await user.save();
+          console.log('✅ User saved with OTP');
           
           // Send OTP email using custom email service
+          console.log('🔄 Calling emailService.sendOTPEmail...');
+          console.log('   Parameters:', {
+            email: user.email,
+            name: user.name,
+            otp: otp
+          });
+          
           const emailResult = await emailService.sendOTPEmail(user.email, user.name, otp);
+          console.log('🔍 Email service result:', emailResult);
           
           if (emailResult.success) {
             otpData = {
@@ -575,12 +877,18 @@ async function createUser(userData) {
               preAuthSessionId: user.supertokensUserId
             };
             console.log('✅ OTP sent successfully');
+            console.log('   OTP data:', otpData);
           } else {
-            console.error('❌ Failed to send OTP:', emailResult.error);
+            console.error('❌ Failed to send OTP:');
+            console.error('   Error:', emailResult.error);
+            console.error('   Full result:', emailResult);
             // Don't fail user creation if OTP fails, but log it
           }
         } catch (otpError) {
-          console.error('❌ Error sending OTP:', otpError);
+          console.error('❌ Error sending OTP:');
+          console.error('   Error message:', otpError.message);
+          console.error('   Error stack:', otpError.stack);
+          console.error('   Full error:', otpError);
           // Don't fail user creation if OTP fails, but log it
         }
         
@@ -617,7 +925,10 @@ module.exports = {
   getUserStats,
   getUserById,
   updateUserStatus,
+  checkUserSessions,
+  revokeAllUserSessions,
   updateUserRoles,
+  addUserRoles,
   deleteUser,
   createUser
 };

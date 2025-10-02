@@ -25,6 +25,72 @@ const authenticateTokenEnhanced = async (req, res, next) => {
   }
 };
 
+// Session validation with deactivation check
+const authenticateTokenWithDeactivationCheck = async (req, res, next) => {
+  try {
+    console.log('🔍 Auth Middleware: Checking session and user status...');
+    
+    // First verify the session
+    await verifySession()(req, res, async () => {
+      try {
+        // Get the session
+        const Session = require('supertokens-node/recipe/session');
+        const session = await Session.getSession(req, res);
+        
+        if (session) {
+          const userId = session.getUserId();
+          console.log('🔍 Auth Middleware: Session valid, user ID:', userId);
+          
+          // Check if user is deactivated in SuperTokens metadata
+          try {
+            const UserMetadata = require('supertokens-node/recipe/usermetadata');
+            const { metadata } = await UserMetadata.getUserMetadata(userId);
+            console.log('🔍 Auth Middleware: User metadata:', metadata);
+            console.log('   isDeactivated:', metadata?.isDeactivated);
+            
+            if (metadata?.isDeactivated === true) {
+              console.log('❌ Auth Middleware: User is deactivated - revoking session and blocking access');
+              
+              // Revoke the current session
+              await session.revokeSession();
+              
+              return res.status(401).json({
+                success: false,
+                error: 'Account deactivated',
+                message: 'Your account has been deactivated. Please contact support.'
+              });
+            }
+            
+            console.log('✅ Auth Middleware: User is active - allowing access');
+          } catch (metadataError) {
+            console.error('❌ Auth Middleware: Error checking user metadata:', metadataError);
+            // If we can't check metadata, allow the request to continue
+            // This prevents blocking users due to metadata service issues
+            console.log('⚠️ Auth Middleware: Allowing request due to metadata error');
+          }
+        }
+        
+        // Continue to the next middleware/route handler
+        next();
+      } catch (sessionError) {
+        console.error('❌ Auth Middleware: Error in session processing:', sessionError);
+        return res.status(401).json({
+          success: false,
+          error: 'Session validation failed',
+          message: 'Please login again'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('❌ Auth Middleware: Session verification failed:', error);
+    return res.status(401).json({ 
+      success: false,
+      error: 'Invalid session',
+      message: 'Please login again'
+    });
+  }
+};
+
 const authenticateOptional = async (req, res, next) => {
   try {
     await verifySession()(req, res, next);
@@ -246,6 +312,7 @@ const logAuthenticatedRequest = (req, res, next) => {
 module.exports = {
   authenticateToken,
   authenticateTokenEnhanced,
+  authenticateTokenWithDeactivationCheck,
   authenticateOptional,
   requireRole,
   requirePermission,

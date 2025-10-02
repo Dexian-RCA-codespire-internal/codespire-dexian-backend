@@ -33,8 +33,21 @@ const userSchema = new mongoose.Schema({
   },
   roles: [{
     type: String,
-    enum: ['user', 'admin'],
-    default: ['user']
+    enum: ['admin', 'user', 'viewer', 'manager', 'support_agent', 
+      'dashboard_reader', 'dashboard_editor', 'dashboard_owner',
+      'tickets_reader', 'tickets_editor', 'tickets_owner',
+      'sla_reader', 'sla_editor', 'sla_owner',
+      'playbooks_reader', 'playbooks_editor', 'playbooks_owner',
+      'aiRca_reader', 'aiRca_editor', 'aiRca_owner',
+      'patternDetector_reader', 'patternDetector_editor', 'patternDetector_owner',
+      'playbookRecommender_reader', 'playbookRecommender_editor', 'playbookRecommender_owner',
+      'customerRcaSummary_reader', 'customerRcaSummary_editor', 'customerRcaSummary_owner',
+      'alertCorrelation_reader', 'alertCorrelation_editor', 'alertCorrelation_owner',
+      'complianceAudit_reader', 'complianceAudit_editor', 'complianceAudit_owner',
+      'chatbot_reader', 'chatbot_editor', 'chatbot_owner',
+      'userManagement_reader', 'userManagement_editor', 'userManagement_owner'
+    ],
+    default: ['viewer']
   }],
   permissions: [{
     type: String
@@ -92,7 +105,7 @@ const userSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended'],
+    enum: ['active', 'inactive'],
     default: 'active'
   }
 }, {
@@ -223,7 +236,7 @@ userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
   return this.findOne({ supertokensUserId });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null, roles = ['user'], permissions = []) {
+userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null, roles = ['viewer'], permissions = []) {
   console.log('User.createUser called with:', {
     supertokensUserId,
     email: email.toLowerCase(),

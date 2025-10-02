@@ -44,8 +44,14 @@ class RBACService {
    */
   static async assignRoleToUser(userId, role) {
     try {
+      console.log('🔍 RBACService.assignRoleToUser called with:');
+      console.log('   userId:', userId, '(type:', typeof userId, ')');
+      console.log('   role:', role, '(type:', typeof role, ')');
+      
       // Assign role in SuperTokens with tenantId "public"
+      console.log('🔄 Calling SuperTokens UserRoles.addRoleToUser...');
       const result = await UserRoles.addRoleToUser("public", userId, role);
+      console.log('   SuperTokens result:', result);
       
       if (result.status === 'OK') {
         // Sync with MongoDB
