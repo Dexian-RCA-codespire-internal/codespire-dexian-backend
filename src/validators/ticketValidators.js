@@ -37,15 +37,6 @@ const validateTicketUpdate = [
         .withMessage('Short description must be between 5 and 500 characters')
         .trim(),
 
-    // Description validation
-    body('description')
-        .optional()
-        .isString()
-        .withMessage('Description must be a string')
-        .isLength({ min: 0, max: 5000 })
-        .withMessage('Description must not exceed 5000 characters')
-        .trim(),
-
     // Category validation
     body('category')
         .optional()
@@ -287,8 +278,8 @@ const validateUpdateData = (req, res, next) => {
                 'problem_step1',
                 'timeline_step2',
                 'impact_step3',
-                'findings_step4',
-                'root_cause_step5'
+                'root_cause_step4',
+                'corrective_actions_step5'
             ]
         });
     }

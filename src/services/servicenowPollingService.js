@@ -2,6 +2,7 @@
 const cron = require('node-cron');
 const { fetchTicketsAndSave } = require('./servicenowIngestionService');
 const { webSocketService } = require('./websocketService');
+const { notificationService } = require('./notificationService');
 const config = require('../config');
 const mongoose = require('mongoose');
 
@@ -32,7 +33,7 @@ class ServiceNowPollingService {
     this.maxRetries = config.servicenow.maxRetries || 3;
     this.retryDelay = config.servicenow.retryDelay || 5000; // 5 seconds
     this.healthCheckInterval = null;
-    this.healthCheckIntervalMinutes = 1; // Run health check every 1 minute
+    this.healthCheckIntervalSeconds = config.servicenow.healthCheckIntervalSeconds || 10; // Run health check every 10 seconds (configurable)
   }
 
   /**
@@ -233,7 +234,7 @@ class ServiceNowPollingService {
       return;
     }
 
-    console.log(`🔍 Starting periodic health check every ${this.healthCheckIntervalMinutes} minute(s)`);
+    console.log(`🔍 Starting periodic health check every ${this.healthCheckIntervalSeconds} second(s)`);
     
     this.healthCheckInterval = setInterval(async () => {
       try {
@@ -243,7 +244,7 @@ class ServiceNowPollingService {
       } catch (error) {
         console.error('❌ Periodic health check error:', error);
       }
-    }, this.healthCheckIntervalMinutes * 60 * 1000); // Convert minutes to milliseconds
+    }, this.healthCheckIntervalSeconds * 1000); // Convert seconds to milliseconds
   }
 
   /**
@@ -393,7 +394,7 @@ class ServiceNowPollingService {
       );
 
       // Create query for new/updated tickets since last sync
-      const lastSyncTime = pollingState.lastSyncTime;
+      const lastSyncTime = pollingState?.lastSyncTime || new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24 hours ago
       const currentTime = new Date();
       
       // ServiceNow query for tickets created or updated since last sync
@@ -452,12 +453,19 @@ class ServiceNowPollingService {
         });
 
         // Emit notification for new tickets
-        if (newTicketsCount > 0) {
-          webSocketService.emitNotification(
-            `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
-            'success'
-          );
-        }
+        // if (newTicketsCount > 0) {
+        //   await notificationService.createAndBroadcast({
+        //     title: "New tickets found",
+        //     message: `${newTicketsCount} new ticket${newTicketsCount > 1 ? 's' : ''} found from ServiceNow`,
+        //     type: "success",
+        //     metadata: {
+        //       newTicketsCount,
+        //       updatedTicketsCount,
+        //       totalProcessed: result.total,
+        //       source: "polling"
+        //     }
+        //   });
+        // }
 
       } else {
         throw new Error(result.error || 'Unknown error during polling');

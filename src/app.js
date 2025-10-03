@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 // Initialize SuperTokens
-const { initSuperTokens, config } = require('./config/supertokens');
+const { initSuperTokens } = require('./config/supertokens');
 initSuperTokens();
 
 console.log('✅ SuperTokens initialized');
@@ -23,8 +23,8 @@ initializeDatabase().catch(error => {
 const { pollingService } = require('./services/servicenowPollingService');
 const { bulkImportAllTickets, hasCompletedBulkImport, getBulkImportStatus } = require('./services/servicenowIngestionService');
 const { webSocketService } = require('./services/websocketService');
-// const sessionRemovalDetector = require('./services/sessionRemovalDetector');
-const appConfig = require('./config');
+const { slaMonitoringService } = require('./services/slaMonitoringService');
+const config = require('./config');
 
 
 const app = express();
@@ -36,6 +36,17 @@ const PORT = process.env.PORT || 8081;
 
 // Middleware
 app.use(helmet());
+app.use(cors({
+  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
+    process.env.FRONTEND_URL || 'http://localhost:3001',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'st-auth-mode', 'rid', 'fdi-version', 'x-socket-id'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+}));
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -112,7 +123,7 @@ app.use(limiter);
 // Consolidated CORS configuration with SuperTokens support
 const corsOrigins = process.env.CORS_ORIGINS ? 
   process.env.CORS_ORIGINS.split(',') : 
-  [config.websiteDomain, "http://localhost:3001"];
+  [config.supertokens.appDomain, "http://localhost:3001"];
 
 app.use(
   cors({
@@ -129,7 +140,7 @@ app.use(middleware());
 
 // Debug: Log all incoming requests
 app.use((req, res, next) => {
-  console.log(`🔍 ${req.method} ${req.path}`);
+  console.log(`🔍 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'}`);
   next();
 });
 
@@ -153,7 +164,7 @@ app.use((req, res, next) => {
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *               uptime: 3600
  */
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -230,6 +241,9 @@ app.get('/health/detailed', async (req, res) => {
 // Setup Swagger documentation
 const { setupSwagger } = require('./swagger');
 setupSwagger(app, PORT);
+
+// Serve static email assets
+app.use('/email-assets', express.static('public/email-assets'));
 
 // API routes
 app.use('/api/v1', require('./routes'));
@@ -426,12 +440,12 @@ webSocketService.initialize(server);
 
 server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  console.log(`📱 Health check: ${process.env.BACKEND_URL || `http://localhost:${PORT}`}/health`);
   console.log(`🔌 WebSocket server initialized`);
   
   // Initialize ServiceNow bulk import if enabled and not already completed
-  console.log(`🔧 ServiceNow URL: ${appConfig.servicenow.url || 'Not configured'}`);
-  if (appConfig.servicenow.enableBulkImport) {
+  console.log(`🔧 ServiceNow URL: ${config.servicenow.url || 'Not configured'}`);
+  if (config.servicenow.enableBulkImport) {
     try {
       // Check if bulk import has already been completed
       const alreadyCompleted = await hasCompletedBulkImport();
@@ -445,7 +459,7 @@ server.listen(PORT, async () => {
       } else {
         console.log('🔄 Starting ServiceNow bulk import (first time setup)...');
         const result = await bulkImportAllTickets({
-          batchSize: appConfig.servicenow.bulkImportBatchSize
+          batchSize: config.servicenow.bulkImportBatchSize
         });
         
         if (result.success) {
@@ -514,14 +528,14 @@ server.listen(PORT, async () => {
   
   // Debug: Log ServiceNow configuration
   console.log('🔧 ServiceNow Configuration:');
-  console.log(`   - enablePolling: ${appConfig.servicenow.enablePolling}`);
-  console.log(`   - pollingInterval: ${appConfig.servicenow.pollingInterval}`);
-  console.log(`   - url: ${appConfig.servicenow.url ? 'Set' : 'Not set'}`);
-  console.log(`   - username: ${appConfig.servicenow.username ? 'Set' : 'Not set'}`);
-  console.log(`   - enableBulkImport: ${appConfig.servicenow.enableBulkImport}`);
+  console.log(`   - enablePolling: ${config.servicenow.enablePolling}`);
+  console.log(`   - pollingInterval: ${config.servicenow.pollingInterval}`);
+  console.log(`   - url: ${config.servicenow.url ? 'Set' : 'Not set'}`);
+  console.log(`   - username: ${config.servicenow.username ? 'Set' : 'Not set'}`);
+  console.log(`   - enableBulkImport: ${config.servicenow.enableBulkImport}`);
   
   // Initialize ServiceNow polling service if enabled
-  if (appConfig.servicenow.enablePolling) {
+  if (config.servicenow.enablePolling) {
     try {
       console.log('🚀 Initializing ServiceNow polling service...');
       await pollingService.initialize();
@@ -538,9 +552,14 @@ server.listen(PORT, async () => {
     console.log('ℹ️ ServiceNow polling is disabled (set SERVICENOW_ENABLE_POLLING=true to enable)');
   }
 
-  // // Start session removal detection
-  // sessionRemovalDetector.startMonitoring();
-  // console.log('✅ Session removal detection started');
+  // Initialize SLA Monitoring Service
+  try {
+    console.log('🚀 Initializing SLA monitoring service...');
+    await slaMonitoringService.initialize();
+    console.log('✅ SLA monitoring service initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize SLA monitoring service:', error);
+  }
 });
 
 // SuperTokens error handler (must be last)

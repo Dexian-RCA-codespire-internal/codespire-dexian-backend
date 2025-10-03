@@ -179,6 +179,49 @@ router.get('/verify-session', getUserRole, userController.verifySession);
  *       500:
  *         description: Internal server error
  */
+// Test endpoint without middleware first
+router.get('/session/status/test', (req, res) => {
+  res.json({ success: true, message: 'Test endpoint working' });
+});
+
+// Simplified session status endpoint without middleware for debugging
+router.get('/session/status/simple', async (req, res) => {
+  try {
+    console.log('🔍 Simple session status endpoint called');
+    
+    // Try to get session using SuperTokens directly
+    const Session = require('supertokens-node/recipe/session');
+    const session = await Session.getSession(req, res, { sessionRequired: false });
+    
+    if (session) {
+      console.log('✅ Session found in simple endpoint');
+      res.json({
+        success: true,
+        data: {
+          isValid: true,
+          sessionHandle: session.getHandle(),
+          userId: session.getUserId()
+        }
+      });
+    } else {
+      console.log('❌ No session found in simple endpoint');
+      res.status(401).json({
+        success: false,
+        message: 'No session found',
+        sessionRevoked: true
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error in simple session endpoint:', error);
+    res.status(401).json({
+      success: false,
+      message: 'Session validation failed',
+      sessionRevoked: true,
+      error: error.message
+    });
+  }
+});
+
 router.get('/session/status', getUserRole, userController.checkSessionStatus);
 
 /**
@@ -823,8 +866,59 @@ router.post('/session/refresh', getUserRole, userController.refreshUserSession);
  *       500:
  *         description: Internal server error
  */
+// Test endpoint without middleware first
+router.get('/session/info/test', (req, res) => {
+  res.json({ success: true, message: 'Session info test endpoint working' });
+});
+
 router.get('/session/info', getUserRole, userController.getCurrentSessionInfo);
 router.get('/session/active', getUserRole, userController.getCurrentUserActiveSessions);
 router.post('/session/sync', getUserRole, userController.syncUserSessions);
+/**
+ * @swagger
+ * /api/v1/users/session/cleanup:
+ *   post:
+ *     summary: Clean up invalid sessions for current user
+ *     description: Remove all invalid sessions from MongoDB that no longer exist in SuperTokens
+ *     tags: [Users]
+ *     security:
+ *       - sessionAuth: []
+ *     responses:
+ *       200:
+ *         description: Session cleanup completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Session cleanup completed successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     cleanedAt:
+ *                       type: string
+ *                       format: date-time
+ *                     cleanupResult:
+ *                       type: object
+ *                       properties:
+ *                         success:
+ *                           type: boolean
+ *                         removedCount:
+ *                           type: integer
+ *                         remainingSessions:
+ *                           type: integer
+ *       401:
+ *         description: Unauthorized - Invalid session
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/session/cleanup', getUserRole, userController.cleanupUserSessions);
 
 module.exports = router;

@@ -792,33 +792,77 @@ const getCurrentUserActiveSessions = async (req, res) => {
   }
 };
 
-// /**
-//  * Manually sync user sessions
-//  */
+/**
+ * Manually sync user sessions between SuperTokens and MongoDB
+ */
 const syncUserSessions = async (req, res) => {
   try {
     const userId = req.session.getUserId();
     
-    // Import session removal detector
-    const sessionRemovalDetector = require('../services/sessionRemovalDetector');
+    // Use SessionUtils to sync sessions
+    const result = await SessionUtils.syncUserSessions(userId);
     
-    // Manually sync sessions
-    await sessionRemovalDetector.syncUserSessions(userId);
-    
-    res.json({
-      success: true,
-      message: 'Sessions synced successfully',
-      data: {
-        userId: userId,
-        syncedAt: new Date().toISOString()
-      }
-    });
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Sessions synced successfully',
+        data: {
+          userId: userId,
+          syncedAt: new Date().toISOString(),
+          syncResult: result
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Session sync failed',
+        message: result.reason || result.error || 'Failed to sync sessions'
+      });
+    }
     
   } catch (error) {
     console.error('❌ Error syncing user sessions:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to sync sessions',
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Clean up invalid sessions for current user
+ */
+const cleanupUserSessions = async (req, res) => {
+  try {
+    const userId = req.session.getUserId();
+    
+    // Use SessionUtils to cleanup invalid sessions
+    const result = await SessionUtils.cleanupAllInvalidSessions(userId);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Session cleanup completed successfully',
+        data: {
+          userId: userId,
+          cleanedAt: new Date().toISOString(),
+          cleanupResult: result
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Session cleanup failed',
+        message: result.reason || result.error || 'Failed to cleanup sessions'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error cleaning up user sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to cleanup sessions',
       message: 'Internal server error'
     });
   }
@@ -840,5 +884,6 @@ module.exports = {
   refreshUserSession,
   getCurrentSessionInfo,
   getCurrentUserActiveSessions,
-  syncUserSessions
+  syncUserSessions,
+  cleanupUserSessions
 };

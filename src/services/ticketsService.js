@@ -1,5 +1,7 @@
 // new file servicenow
 const Ticket = require('../models/Tickets');
+const { notificationService } = require('./notificationService');
+const { createOrUpdateSLA } = require('./slaService');
 
 /**
  * Fetch tickets from MongoDB database
@@ -20,7 +22,12 @@ const fetchTicketsFromDB = async (options = {}) => {
       category,
       source = 'ServiceNow',
       sortBy = 'opened_time',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      // New filter parameters
+      sources = [],
+      priorities = [],
+      dateRange = { startDate: '', endDate: '' },
+      stages = []
     } = options;
 
     // Calculate offset from page if provided
@@ -34,8 +41,10 @@ const fetchTicketsFromDB = async (options = {}) => {
     // Build query filter
     const filter = {};
     
-    // Add source filter
-    if (source) {
+    // Add source filter - handle both single source and multiple sources
+    if (sources && sources.length > 0) {
+      filter.source = { $in: sources };
+    } else if (source) {
       filter.source = source;
     }
 
@@ -44,14 +53,60 @@ const fetchTicketsFromDB = async (options = {}) => {
       filter.status = status;
     }
 
-    // Add priority filter
-    if (priority) {
+    // Add priority filter - handle both single priority and multiple priorities
+    if (priorities && priorities.length > 0) {
+      filter.priority = { $in: priorities };
+    } else if (priority) {
       filter.priority = priority;
     }
 
     // Add category filter
     if (category) {
       filter.category = category;
+    }
+
+    // Add date range filter
+    if (dateRange && (dateRange.startDate || dateRange.endDate)) {
+      filter.createdAt = {};
+      if (dateRange.startDate && dateRange.startDate.trim() !== '') {
+        const startDate = new Date(dateRange.startDate + 'T00:00:00.000Z');
+        filter.createdAt.$gte = startDate;
+      }
+      if (dateRange.endDate && dateRange.endDate.trim() !== '') {
+        const endDate = new Date(dateRange.endDate + 'T23:59:59.999Z');
+        filter.createdAt.$lte = endDate;
+      }
+      // If only startDate is provided, set endDate to startDate for "today" filtering
+      if (dateRange.startDate && dateRange.startDate.trim() !== '' && (!dateRange.endDate || dateRange.endDate.trim() === '')) {
+        const endDate = new Date(dateRange.startDate + 'T23:59:59.999Z');
+        filter.createdAt.$lte = endDate;
+      }
+    }
+
+    // Add stages filter - convert RCA stages to MongoDB status values
+    if (stages && stages.length > 0) {
+      const statusValues = []
+      
+      stages.forEach(stage => {
+        switch (stage) {
+          case 'New':
+            statusValues.push('New', 'Pending')
+            break
+          case 'Analysis':
+            statusValues.push('In Progress', 'Assigned')
+            break
+          case 'Resolved':
+            statusValues.push('Resolved', 'Closed')
+            break
+          case 'Closed/Cancelled':
+            statusValues.push('Cancelled', 'Closed')
+            break
+        }
+      })
+      
+      if (statusValues.length > 0) {
+        filter.status = { $in: statusValues }
+      }
     }
 
     // Add text search if query provided
@@ -320,6 +375,9 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
       };
     }
 
+    // Capture previous status before update
+    const previousStatus = ticket.status;
+    
     // Remove fields that shouldn't be updated directly
     const { _id, ticket_id, source: ticketSource, createdAt, updatedAt, ...allowedUpdates } = updateData;
     
@@ -342,6 +400,40 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
         error: 'Failed to update ticket',
         data: null
       };
+    }
+
+    // Persist notification for updated ticket
+    try {
+      if (previousStatus !== updatedTicket.status) {
+        // Status changed
+        await notificationService.createAndBroadcast({
+          title: "Ticket status changed",
+          message: `Ticket ${updatedTicket.ticket_id} status: ${previousStatus} → ${updatedTicket.status}`,
+          type: "info",
+          related: {
+            ticketMongoId: updatedTicket._id,
+            ticket_id: updatedTicket.ticket_id,
+            eventType: "status_changed"
+          }
+        });
+      } 
+
+    } catch (notificationError) {
+      console.error(`⚠️ Failed to create notification for ticket update:`, notificationError.message);
+      // Don't fail the update if notification fails
+    }
+
+    // Update SLA record for the updated ticket
+    try {
+      const slaResult = await createOrUpdateSLA(updatedTicket);
+      if (slaResult.success) {
+        console.log(`✅ Updated SLA record for ticket: ${updatedTicket.ticket_id}`);
+      } else {
+        console.log(`⚠️ Failed to update SLA for ticket ${updatedTicket.ticket_id}: ${slaResult.error}`);
+      }
+    } catch (slaError) {
+      console.error(`❌ Error updating SLA for ticket ${updatedTicket.ticket_id}:`, slaError.message);
+      // Don't fail the entire process if SLA update fails
     }
 
     console.log(`✅ Updated ticket: ${updatedTicket.ticket_id}`);

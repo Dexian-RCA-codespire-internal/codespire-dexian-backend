@@ -13,6 +13,10 @@ const config = {
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD
   },
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL: process.env.GEMINI_MODEL,
+  GEMINI_MAX_TOKENS: process.env.GEMINI_MAX_TOKENS,
+  GEMINI_TEMPERATURE: process.env.GEMINI_TEMPERATURE,
   
   // SuperTokens configuration
   supertokens: {
@@ -23,21 +27,21 @@ const config = {
     apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081',
     // Token lifetime configuration - SINGLE SOURCE OF TRUTH
     // Set these in your .env file:
-    // ACCESS_TOKEN_MINUTES=2    (access token lifetime in minutes)
-    // REFRESH_TOKEN_MINUTES=5   (refresh token lifetime in minutes)
-    accessTokenMinutes: parseInt(process.env.ACCESS_TOKEN_MINUTES) || 2,
-    refreshTokenMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 5,
+    // ACCESS_TOKEN_MINUTES=60    (access token lifetime in minutes - 1 hour)
+    // REFRESH_TOKEN_MINUTES=1440 (refresh token lifetime in minutes - 24 hours)
+    accessTokenMinutes: parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60,
+    refreshTokenMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
     
     // Convert to milliseconds for application use
-    accessTokenValidity: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 2) * 60 * 1000,
-    refreshTokenValidity: (parseInt(process.env.REFRESH_TOKEN_MINUTES) || 5) * 60 * 1000,
+    accessTokenValidity: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60 * 1000,
+    refreshTokenValidity: (parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440) * 60 * 1000,
     
     // Convert to seconds/minutes for SuperTokens core
-    accessTokenValiditySeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 2) * 60,
-    refreshTokenValidityMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 5,
+    accessTokenValiditySeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60,
+    refreshTokenValidityMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
     
     // For docker-compose environment variables
-    accessTokenSeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 2) * 60
+    accessTokenSeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60
   },
 
   
@@ -76,6 +80,15 @@ const config = {
       password: process.env.SMTP_PASSWORD || "sswyyhytchrsfckf",
       fromName: process.env.SMTP_FROM_NAME || "Pramod",
       fromEmail: process.env.SMTP_FROM_EMAIL || "pramod@codespiresolutions.com"
+    },
+    assets: {
+      companyName: process.env.EMAIL_COMPANY_NAME || "Dexian",
+      supportEmail: process.env.EMAIL_SUPPORT_EMAIL || "support@dexian.com",
+      logo: {
+        alt: process.env.EMAIL_LOGO_ALT || "Dexian Logo",
+        width: process.env.EMAIL_LOGO_WIDTH || "120",
+        height: process.env.EMAIL_LOGO_HEIGHT || "auto"
+      }
     }
   },
 
@@ -122,7 +135,9 @@ const config = {
       enablePolling: process.env.SERVICENOW_ENABLE_POLLING === 'true' || false,
       // Bulk import configuration
       enableBulkImport: process.env.SERVICENOW_ENABLE_BULK_IMPORT === 'true' || false,
-      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100
+      bulkImportBatchSize: parseInt(process.env.SERVICENOW_BULK_IMPORT_BATCH_SIZE) || 100,
+      // Health check configuration
+      healthCheckIntervalSeconds: parseInt(process.env.SERVICENOW_HEALTH_CHECK_INTERVAL_SECONDS) || 10
     },
 
       // Output configuration

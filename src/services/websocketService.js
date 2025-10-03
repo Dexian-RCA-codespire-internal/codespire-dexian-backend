@@ -17,7 +17,7 @@ class WebSocketService {
     this.io = new Server(server, {
       cors: {
         origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [
-          'http://localhost:3001',
+          process.env.FRONTEND_URL || 'http://localhost:3001',
         ],
         methods: ['GET', 'POST'],
         credentials: true
@@ -140,7 +140,7 @@ class WebSocketService {
       timestamp: new Date().toISOString()
     };
 
-    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients:`, eventData);
+    console.log(`📡 Emitting polling status to ${this.connectedClients.size} clients`);
     this.io.emit('polling_status', eventData);
     console.log(`✅ Polling status emitted successfully`);
   }
@@ -165,6 +165,48 @@ class WebSocketService {
 
     this.io.emit('notification', eventData);
     console.log(`📡 Emitted notification to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA warning event
+   * @param {Object} slaData - SLA warning data
+   */
+  emitSLAWarning(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:warning', slaData);
+    console.log(`📡 Emitted SLA warning for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA critical event
+   * @param {Object} slaData - SLA critical data
+   */
+  emitSLACritical(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:critical', slaData);
+    console.log(`📡 Emitted SLA critical for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
+  }
+
+  /**
+   * Emit SLA breach event
+   * @param {Object} slaData - SLA breach data
+   */
+  emitSLABreach(slaData) {
+    if (!this.io) {
+      console.warn('⚠️ WebSocket server not initialized');
+      return;
+    }
+
+    this.io.emit('sla:breach', slaData);
+    console.log(`📡 Emitted SLA breach for ticket ${slaData.ticketId} to ${this.connectedClients.size} clients`);
   }
 
   /**
@@ -194,7 +236,12 @@ class WebSocketService {
         category, 
         source = 'ServiceNow',
         sortBy = 'opened_time',
-        sortOrder = 'desc'
+        sortOrder = 'desc',
+        // Extract filter arrays from options
+        sources = [],
+        priorities = [],
+        dateRange = { startDate: '', endDate: '' },
+        stages = []
       } = options;
 
       const result = await fetchTicketsFromDB({
@@ -206,7 +253,12 @@ class WebSocketService {
         category,
         source,
         sortBy,
-        sortOrder
+        sortOrder,
+        // Pass filter arrays
+        sources,
+        priorities,
+        dateRange,
+        stages
       });
 
       if (result.success) {
