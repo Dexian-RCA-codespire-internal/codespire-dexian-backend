@@ -16,9 +16,9 @@ class RBACService {
       const roleResult = await UserRoles.createNewRoleOrAddPermissions(role, permissions);
       
       if (roleResult.createdNewRole) {
-        console.log(`✅ Created new role: ${role}`);
+        console.log(`Created new role: ${role}`);
       } else {
-        console.log(`✅ Updated existing role: ${role}`);
+        console.log(`Updated existing role: ${role}`);
       }
       
       return {
@@ -28,7 +28,7 @@ class RBACService {
         message: roleResult.createdNewRole ? 'Role created successfully' : 'Role updated successfully'
       };
     } catch (error) {
-      console.error('❌ Error creating role:', error);
+      console.error('Error creating role:', error);
       return {
         success: false,
         error: error.message || 'Failed to create role'
@@ -44,12 +44,12 @@ class RBACService {
    */
   static async assignRoleToUser(userId, role) {
     try {
-      console.log('🔍 RBACService.assignRoleToUser called with:');
+      console.log('RBACService.assignRoleToUser called with:');
       console.log('   userId:', userId, '(type:', typeof userId, ')');
       console.log('   role:', role, '(type:', typeof role, ')');
       
       // Assign role in SuperTokens with tenantId "public"
-      console.log('🔄 Calling SuperTokens UserRoles.addRoleToUser...');
+      console.log('Calling SuperTokens UserRoles.addRoleToUser...');
       const result = await UserRoles.addRoleToUser("public", userId, role);
       console.log('   SuperTokens result:', result);
       
@@ -61,7 +61,7 @@ class RBACService {
             user.roles.push(role);
             await user.save();
           }
-          console.log(`✅ Role ${role} assigned to user ${userId} and synced to MongoDB`);
+          console.log(`Role ${role} assigned to user ${userId} and synced to MongoDB`);
         }
         
         return {
@@ -75,7 +75,7 @@ class RBACService {
         };
       }
     } catch (error) {
-      console.error('❌ Error assigning role:', error);
+      console.error('Error assigning role:', error);
       return {
         success: false,
         error: error.message || 'Failed to assign role'
@@ -104,7 +104,7 @@ class RBACService {
             user.roles.push('user');
           }
           await user.save();
-          console.log(`✅ Role ${role} removed from user ${userId} and synced to MongoDB`);
+          console.log(`Role ${role} removed from user ${userId} and synced to MongoDB`);
         }
         
         return {
@@ -118,7 +118,7 @@ class RBACService {
         };
       }
     } catch (error) {
-      console.error('❌ Error removing role:', error);
+      console.error('Error removing role:', error);
       return {
         success: false,
         error: error.message || 'Failed to remove role'
@@ -133,18 +133,18 @@ class RBACService {
    */
   static async getUserRoles(userId) {
     try {
-      console.log('🔍 RBACService: Getting roles for user:', userId);
+      console.log('RBACService: Getting roles for user:', userId);
       
       // Get roles with tenantId "public"
       const roles = await UserRoles.getRolesForUser("public", userId);
-      console.log('🔍 RBACService: User roles:', roles);
+      console.log('RBACService: User roles:', roles);
       
       return {
         success: true,
         roles: roles.roles || []
       };
     } catch (error) {
-      console.error('❌ RBACService: Error getting user roles:', error);
+      console.error('RBACService: Error getting user roles:', error);
       return {
         success: false,
         error: error.message || 'Failed to get user roles'
@@ -159,14 +159,14 @@ class RBACService {
    */
   static async getUserPermissions(userId) {
     try {
-      console.log('🔍 RBACService: Getting permissions for user:', userId);
+      console.log('RBACService: Getting permissions for user:', userId);
       
       // Get user roles first with tenantId "public"
       const userRoles = await UserRoles.getRolesForUser("public", userId);
-      console.log('🔍 RBACService: User roles:', userRoles);
+      console.log('RBACService: User roles:', userRoles);
       
       if (!userRoles || !userRoles.roles || userRoles.roles.length === 0) {
-        console.log('🔍 RBACService: No roles found for user');
+        console.log('RBACService: No roles found for user');
         return {
           success: true,
           permissions: []
@@ -177,28 +177,28 @@ class RBACService {
       
       // Get permissions for each role
       for (const role of userRoles.roles) {
-        console.log('🔍 RBACService: Getting permissions for role:', role);
+        console.log('RBACService: Getting permissions for role:', role);
         const rolePermissions = await UserRoles.getPermissionsForRole(role);
-        console.log('🔍 RBACService: Role permissions response:', rolePermissions);
+        console.log('RBACService: Role permissions response:', rolePermissions);
         
         if (rolePermissions.status !== "UNKNOWN_ROLE_ERROR" && rolePermissions.permissions) {
-          console.log('🔍 RBACService: Role', role, 'has permissions:', rolePermissions.permissions);
+          console.log('RBACService: Role', role, 'has permissions:', rolePermissions.permissions);
           allPermissions.push(...rolePermissions.permissions);
         } else {
-          console.log('🔍 RBACService: Role', role, 'has no permissions or unknown role error');
+          console.log('RBACService: Role', role, 'has no permissions or unknown role error');
         }
       }
       
       // Remove duplicates
       const uniquePermissions = [...new Set(allPermissions)];
-      console.log('🔍 RBACService: Final user permissions:', uniquePermissions);
+      console.log('RBACService: Final user permissions:', uniquePermissions);
       
       return {
         success: true,
         permissions: uniquePermissions
       };
     } catch (error) {
-      console.error('❌ RBACService: Error getting user permissions:', error);
+      console.error('RBACService: Error getting user permissions:', error);
       return {
         success: false,
         error: error.message || 'Failed to get user permissions'
@@ -223,7 +223,7 @@ class RBACService {
         hasRole: hasRole
       };
     } catch (error) {
-      console.error('❌ Error checking user role:', error);
+      console.error('Error checking user role:', error);
       return {
         success: false,
         error: error.message || 'Failed to check user role'
@@ -255,7 +255,7 @@ class RBACService {
         hasPermission: hasPermission
       };
     } catch (error) {
-      console.error('❌ Error checking user permission:', error);
+      console.error('Error checking user permission:', error);
       return {
         success: false,
         error: error.message || 'Failed to check user permission'
@@ -276,7 +276,7 @@ class RBACService {
         roles: roles.roles || []
       };
     } catch (error) {
-      console.error('❌ Error getting all roles:', error);
+      console.error('Error getting all roles:', error);
       return {
         success: false,
         error: error.message || 'Failed to get all roles'
@@ -298,7 +298,7 @@ class RBACService {
         permissions: allPermissions
       };
     } catch (error) {
-      console.error('❌ Error getting all permissions:', error);
+      console.error('Error getting all permissions:', error);
       return {
         success: false,
         error: error.message || 'Failed to get all permissions'
@@ -321,7 +321,7 @@ class RBACService {
         message: 'Permission created successfully'
       };
     } catch (error) {
-      console.error('❌ Error creating permission:', error);
+      console.error('Error creating permission:', error);
       return {
         success: false,
         error: error.message || 'Failed to create permission'
@@ -344,7 +344,7 @@ class RBACService {
         message: `Permission ${permission} assigned to role ${role}`
       };
     } catch (error) {
-      console.error('❌ Error assigning permission to role:', error);
+      console.error('Error assigning permission to role:', error);
       return {
         success: false,
         error: error.message || 'Failed to assign permission to role'
@@ -367,7 +367,7 @@ class RBACService {
         message: `Permission ${permission} removed from role ${role}`
       };
     } catch (error) {
-      console.error('❌ Error removing permission from role:', error);
+      console.error('Error removing permission from role:', error);
       return {
         success: false,
         error: error.message || 'Failed to remove permission from role'
@@ -389,7 +389,7 @@ class RBACService {
         users: users.users || []
       };
     } catch (error) {
-      console.error('❌ Error getting users with role:', error);
+      console.error('Error getting users with role:', error);
       return {
         success: false,
         error: error.message || 'Failed to get users with role'
@@ -404,15 +404,15 @@ class RBACService {
    */
   static async initializeDefaultRolesAndPermissions(force = false) {
     try {
-      console.log('🔐 Initializing default roles and permissions...');
+      console.log('Initializing default roles and permissions...');
       
       // Check if roles already exist (unless force is true)
       if (!force) {
         const existingRoles = await this.getAllRoles();
         if (existingRoles.success && existingRoles.roles.length > 0) {
-          console.log('ℹ️ Roles already exist in SuperTokens:');
+          console.log('Roles already exist in SuperTokens:');
           existingRoles.roles.forEach(role => console.log(`   - ${role}`));
-          console.log('ℹ️ Skipping role creation. Use force=true to reinitialize.');
+          console.log('Skipping role creation. Use force=true to reinitialize.');
           return {
             success: true,
             message: 'Roles already exist, skipping initialization',
@@ -446,7 +446,7 @@ class RBACService {
           } else {
             updatedRoles.push(role);
           }
-          console.log(`✅ ${result.message}: ${role} with ${permissions.length} permissions`);
+          console.log(`${result.message}: ${role} with ${permissions.length} permissions`);
         }
       }
       
@@ -458,7 +458,7 @@ class RBACService {
         totalRoles: createdRoles.length + updatedRoles.length
       };
     } catch (error) {
-      console.error('❌ Error initializing default roles and permissions:', error);
+      console.error('Error initializing default roles and permissions:', error);
       return {
         success: false,
         error: error.message || 'Failed to initialize default roles and permissions'

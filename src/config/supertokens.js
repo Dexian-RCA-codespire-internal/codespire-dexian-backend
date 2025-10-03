@@ -306,6 +306,25 @@ const initSuperTokens = () => {
                     }
                     
                     console.log('✅ SuperTokens: User is active - login allowed');
+                    
+                    // Update lastLoginAt in MongoDB
+                    try {
+                      console.log('SuperTokens: Updating lastLoginAt for user:', userId);
+                      const User = require('../models/User');
+                      const user = await User.findBySupertokensUserId(userId);
+                      if (user) {
+                        console.log('SuperTokens: User found in MongoDB, updating lastLoginAt');
+                        user.lastLoginAt = new Date();
+                        await user.save();
+                        console.log('SuperTokens: lastLoginAt updated successfully:', user.lastLoginAt);
+                      } else {
+                        console.log('SuperTokens: User not found in MongoDB for userId:', userId);
+                      }
+                    } catch (lastLoginError) {
+                      console.error('SuperTokens: Error updating lastLoginAt:', lastLoginError);
+                      // Don't fail login if lastLoginAt update fails
+                    }
+                    
                   } catch (metadataError) {
                     console.error('❌ SuperTokens: Error checking user metadata during login:');
                     console.error('   Error message:', metadataError.message);

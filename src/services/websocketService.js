@@ -26,11 +26,15 @@ class WebSocketService {
         methods: ['GET', 'POST'],
         credentials: true
       },
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      pingTimeout: 60000, // 60 seconds
+      pingInterval: 25000, // 25 seconds
+      upgradeTimeout: 10000, // 10 seconds
+      allowEIO3: true
     });
 
     this.setupEventHandlers();
-    console.log('✅ WebSocket service initialized');
+    console.log('WebSocket service initialized');
   }
 
   /**
@@ -38,7 +42,7 @@ class WebSocketService {
    */
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`🔌 Client connected: ${socket.id}`);
+      console.log(`Client connected: ${socket.id}`);
       this.connectedClients.add(socket.id);
 
       // Handle client joining specific rooms
@@ -61,7 +65,41 @@ class WebSocketService {
 
       // Handle ping/pong for connection health
       socket.on('ping', () => {
+        console.log(` Received ping from client ${socket.id}`);
         socket.emit('pong');
+      });
+
+      // Track last activity for idle connection detection
+      socket.lastActivity = Date.now();
+      
+      // Update activity on any event
+      const originalEmit = socket.emit;
+      socket.emit = function(...args) {
+        socket.lastActivity = Date.now();
+        return originalEmit.apply(this, args);
+      };
+
+      // Check for idle connections every 30 seconds
+      const idleCheckInterval = setInterval(() => {
+        const now = Date.now();
+        const idleTime = now - socket.lastActivity;
+        
+        if (idleTime > 300000) { // 5 minutes of inactivity
+          console.log(`Client ${socket.id} has been idle for ${Math.round(idleTime / 1000)}s`);
+          socket.emit('idle_warning', { idleTime: Math.round(idleTime / 1000) });
+        }
+        
+        if (idleTime > 600000) { // 10 minutes of inactivity
+          console.log(`🔌 Disconnecting idle client ${socket.id} after ${Math.round(idleTime / 1000)}s`);
+          socket.emit('idle_disconnect', { reason: 'Connection idle for too long' });
+          socket.disconnect(true);
+          clearInterval(idleCheckInterval);
+        }
+      }, 30000);
+
+      // Clean up interval on disconnect
+      socket.on('disconnect', () => {
+        clearInterval(idleCheckInterval);
       });
 
       // Handle paginated data requests
