@@ -1,27 +1,28 @@
 /**
  * LLM Provider Utilities
  * Functional utilities for working with different LLM providers
+ * With Langfuse observability using trace/span/generation pattern
  */
 
 const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
+const observability = require('../observability/langfuse-simple');
 
 /**
  * Available LLM providers configuration
  */
 const LLM_CONFIGS = {
     gemini: {
-        model: 'gemini-2.0-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
         temperature: 0.1,
         maxOutputTokens: 2048,
         createInstance: (config = {}) => new ChatGoogleGenerativeAI({
             apiKey: process.env.GEMINI_API_KEY,
-            model: config.model || 'gemini-2.0-flash',
+            model: config.model || process.env.GEMINI_MODEL || 'gemini-2.0-flash',
             temperature: config.temperature || 0.1,
             maxOutputTokens: config.maxOutputTokens || 2048,
             ...config
         })
     },
-    // Add more providers as needed
     openai: {
         model: 'gpt-4o-mini',
         temperature: 0.1,
@@ -34,9 +35,6 @@ const LLM_CONFIGS = {
 
 /**
  * Create LLM instance with specified provider and config
- * @param {string} provider - Provider name (default: 'gemini')
- * @param {Object} config - Optional configuration overrides
- * @returns {Object} LLM instance
  */
 function createLLM(provider = 'gemini', config = {}) {
     const providerConfig = LLM_CONFIGS[provider];
@@ -49,7 +47,6 @@ function createLLM(provider = 'gemini', config = {}) {
 
 /**
  * Get available LLM providers
- * @returns {Array} List of available provider names
  */
 function getAvailableLLMProviders() {
     return Object.keys(LLM_CONFIGS);
@@ -57,53 +54,254 @@ function getAvailableLLMProviders() {
 
 /**
  * Get provider configuration
- * @param {string} provider - Provider name
- * @returns {Object} Provider configuration
  */
 function getLLMProviderConfig(provider) {
     return LLM_CONFIGS[provider] || null;
 }
 
 /**
- * Generate text using LLM
+ * Generate text using LLM with Langfuse tracking
  * @param {Object} llm - LLM instance
  * @param {string} prompt - Text prompt
+ * @param {Object} options - Generation options
+ * @param {string} options.agentName - Agent name for tracking
+ * @param {string} options.operation - Operation name for tracking
+ * @param {Object} options.metadata - Additional metadata
+ * @param {Array<string>} options.tags - Tags for filtering
+ * @param {Object} options.session - Session info {userId, sessionId}
  * @returns {Promise<string>} Generated text
  */
-async function generateText(llm, prompt) {
+async function generateText(llm, prompt, options = {}) {
+    const startTime = Date.now();
+    
+    // Ensure Langfuse is initialized
+    if (!observability.isConfigured()) {
+        console.warn('⚠️ Langfuse not configured - tracking disabled');
+    } else {
+        // Initialize if not already done
+        if (!observability.getLangfuse()) {
+            observability.initializeLangfuse();
+        }
+    }
+    
+    // Create trace for this LLM call
+    const traceName = `${options.agentName || 'shared-agent'}-${options.operation || 'generateText'}`;
+    const trace = observability.createTrace(traceName, {
+        prompt,
+        promptLength: prompt.length,
+        agentName: options.agentName || 'shared-agent',
+        operation: options.operation || 'generateText'
+    }, {
+        ...options.metadata,
+        tags: options.tags || [],
+        userId: options.session?.userId,
+        sessionId: options.session?.sessionId,
+        provider: 'gemini'
+    });
+    
     try {
+        // Create generation for the LLM call
+        const generation = observability.createGeneration(trace, 'llm-generation', {
+            model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+            input: prompt,
+            metadata: {
+                agentName: options.agentName,
+                operation: options.operation,
+                promptLength: prompt.length
+            }
+        });
+
+        // Make the LLM call
         const response = await llm.invoke(prompt);
+        
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        // Extract token usage
+        const tokenUsage = response.response_metadata?.tokenUsage || response.usage_metadata || null;
+        const inputTokens = tokenUsage?.promptTokens || tokenUsage?.promptTokenCount || tokenUsage?.input_tokens || 0;
+        const outputTokens = tokenUsage?.completionTokens || tokenUsage?.candidatesTokenCount || tokenUsage?.output_tokens || 0;
+        const totalTokens = tokenUsage?.totalTokens || tokenUsage?.totalTokenCount || (inputTokens + outputTokens);
+        
+        // Update generation with output and token usage
+        observability.updateGeneration(generation, response.content, {
+            promptTokens: inputTokens,
+            completionTokens: outputTokens,
+            totalTokens: totalTokens
+        }, {
+            latency,
+            success: true
+        });
+        
+        // End trace
+        observability.endTrace(trace, {
+            response: response.content,
+            responseLength: response.content.length,
+            success: true
+        }, {
+            latency,
+            tokenUsage: {
+                input: inputTokens,
+                output: outputTokens,
+                total: totalTokens
+            }
+        });
+        
+        // Flush data to Langfuse
+        await observability.flush();
+        
+        // Log detailed metrics
+        console.log(`📊 LLM Call - Agent: ${options.agentName || 'shared-agent'}, Operation: ${options.operation || 'generateText'}, Latency: ${latency}ms, Tokens: ${totalTokens} (${inputTokens} in, ${outputTokens} out)`);
+        
         return response.content;
+        
     } catch (error) {
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        // Log error to trace
+        if (trace) {
+            observability.endTrace(trace, {
+                error: error.message,
+                success: false
+            }, {
+                latency,
+                errorType: error.name
+            });
+            await observability.flush();
+        }
+        
         console.error('Error generating text:', error);
+        
+        // Handle quota exceeded errors
+        if (error.message && error.message.includes('quota')) {
+            console.warn('⚠️ API quota exceeded. Consider upgrading your plan or waiting for quota reset.');
+            throw new Error('API quota exceeded. Please try again later or upgrade your plan.');
+        }
+        
         throw error;
     }
 }
 
 /**
- * Generate structured response using LLM
- * @param {Object} llm - LLM instance
- * @param {string} prompt - Text prompt
- * @param {Object} schema - Expected response schema (for future use)
- * @returns {Promise<string>} Generated text
+ * Generate structured response using LLM with Langfuse tracking
  */
-async function generateStructuredResponse(llm, prompt, schema = null) {
+async function generateStructuredResponse(llm, prompt, schema = null, options = {}) {
+    const startTime = Date.now();
+    
+    // Ensure Langfuse is initialized
+    if (!observability.isConfigured()) {
+        console.warn('⚠️ Langfuse not configured - tracking disabled');
+    } else {
+        // Initialize if not already done
+        if (!observability.getLangfuse()) {
+            observability.initializeLangfuse();
+        }
+    }
+    
+    // Create trace
+    const traceName = `${options.agentName || 'shared-agent'}-${options.operation || 'generateStructuredResponse'}`;
+    const trace = observability.createTrace(traceName, {
+        prompt,
+        schema,
+        promptLength: prompt.length,
+        agentName: options.agentName || 'shared-agent',
+        operation: options.operation || 'generateStructuredResponse'
+    }, {
+        ...options.metadata,
+        tags: options.tags || [],
+        userId: options.session?.userId,
+        sessionId: options.session?.sessionId,
+        provider: 'gemini'
+    });
+    
     try {
+        // Create generation
+        const generation = observability.createGeneration(trace, 'llm-structured-generation', {
+            model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+            input: prompt,
+            metadata: {
+                agentName: options.agentName,
+                operation: options.operation,
+                schema: schema ? 'provided' : 'none',
+                promptLength: prompt.length
+            }
+        });
+
+        // Make the LLM call
         const response = await llm.invoke(prompt);
+        
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        // Extract token usage
+        const tokenUsage = response.response_metadata?.tokenUsage || response.usage_metadata || null;
+        const inputTokens = tokenUsage?.promptTokens || tokenUsage?.promptTokenCount || tokenUsage?.input_tokens || 0;
+        const outputTokens = tokenUsage?.completionTokens || tokenUsage?.candidatesTokenCount || tokenUsage?.output_tokens || 0;
+        const totalTokens = tokenUsage?.totalTokens || tokenUsage?.totalTokenCount || (inputTokens + outputTokens);
+        
+        // Update generation
+        observability.updateGeneration(generation, response.content, {
+            promptTokens: inputTokens,
+            completionTokens: outputTokens,
+            totalTokens: totalTokens
+        }, {
+            latency,
+            success: true
+        });
+        
+        // End trace
+        observability.endTrace(trace, {
+            response: response.content,
+            responseLength: response.content.length,
+            success: true
+        }, {
+            latency,
+            tokenUsage: {
+                input: inputTokens,
+                output: outputTokens,
+                total: totalTokens
+            }
+        });
+        
+        // Flush data
+        await observability.flush();
+        
+        // Log metrics
+        console.log(`📊 LLM Call - Agent: ${options.agentName || 'shared-agent'}, Operation: ${options.operation || 'generateStructuredResponse'}, Latency: ${latency}ms, Tokens: ${totalTokens} (${inputTokens} in, ${outputTokens} out)`);
+        
         return response.content;
+        
     } catch (error) {
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        // Log error to trace
+        if (trace) {
+            observability.endTrace(trace, {
+                error: error.message,
+                success: false
+            }, {
+                latency,
+                errorType: error.name
+            });
+            await observability.flush();
+        }
+        
         console.error('Error generating structured response:', error);
+        
+        // Handle quota errors
+        if (error.message && error.message.includes('quota')) {
+            console.warn('⚠️ API quota exceeded. Consider upgrading your plan or waiting for quota reset.');
+            throw new Error('API quota exceeded. Please try again later or upgrade your plan.');
+        }
+        
         throw error;
     }
 }
 
 /**
  * Generate streaming text using LLM with real-time WebSocket streaming
- * @param {Object} llm - LLM instance
- * @param {string} prompt - Text prompt
- * @param {string} socketId - WebSocket socket ID for streaming
- * @param {Object} options - Streaming options
- * @returns {Promise<string>} Complete generated text
  */
 async function generateStreamingText(llm, prompt, socketId, options = {}) {
     const {
@@ -160,7 +358,6 @@ async function generateStreamingText(llm, prompt, socketId, options = {}) {
                     ...metadata
                 });
 
-                // Add delay between chunks
                 if (delay > 0) {
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
@@ -195,7 +392,6 @@ async function generateStreamingText(llm, prompt, socketId, options = {}) {
     } catch (error) {
         console.error('Error in generateStreamingText:', error);
         
-        // Emit error event
         const { webSocketService } = require('../../../services/websocketService');
         if (webSocketService.getServer()) {
             webSocketService.getServer().to(socketId).emit('rca_error', {

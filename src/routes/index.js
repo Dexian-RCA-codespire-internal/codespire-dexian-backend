@@ -21,7 +21,7 @@ const rcaGenerationRoutes = require('./rcaGeneration');
 const autoSuggestionRoutes = require('./autoSuggestion');
 const playbookRoutes = require('./playbooks');
 const problemStatementRoutes = require('./problemStatement');
-const timelineContextRoutes = require('./timelineContext');
+
 const impactAssessmentRoutes = require('./impactAssessment');
 const textEnhancementRoutes = require('./textEnhancement');
 const rcaRootCauseRoutes = require('./rcaRootCause');
@@ -46,7 +46,7 @@ router.use('/notifications', notificationsRoutes);
 router.use('/sla', slaRoutes);
 router.use('/sla/monitoring', slaMonitoringRoutes);
 router.use('/problem-statement', problemStatementRoutes);
-router.use('/timeline-context', timelineContextRoutes);
+
 router.use('/impact-assessment', impactAssessmentRoutes);
 router.use('/text-enhancement', textEnhancementRoutes);
 router.use('/rca-root-cause', rcaRootCauseRoutes);

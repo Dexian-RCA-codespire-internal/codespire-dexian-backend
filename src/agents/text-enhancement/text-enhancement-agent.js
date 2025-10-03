@@ -3,9 +3,8 @@
  * Enhances text quality while maintaining conciseness
  */
 
-const { LLMManager } = require('../../services/llm');
-const { validateInput } = require('../shared/utils/validation');
-const { formatResponse } = require('../shared/utils/response-formatting');
+const { providers, utils } = require('../shared');
+const llmProvider = providers.llm;
 const {
   ENHANCEMENT_TYPES,
   ENHANCEMENT_TYPE_LIST,
@@ -21,7 +20,33 @@ const {
 class TextEnhancementAgent {
   constructor(config) {
     this.config = config;
-    this.llmManager = new LLMManager();
+    this.initialized = false;
+    this.llm = null;
+  }
+
+  /**
+   * Initialize the agent
+   */
+  async initialize() {
+    try {
+      if (this.initialized) {
+        return { success: true, message: 'Agent already initialized' };
+      }
+
+      // Initialize LLM provider using shared module
+      this.llm = llmProvider.createLLM('gemini', {
+        model: this.config.llm.model,
+        temperature: this.config.llm.temperature,
+        maxOutputTokens: this.config.llm.maxTokens
+      });
+      
+      this.initialized = true;
+      console.log('✅ Text Enhancement Agent initialized successfully');
+      return { success: true, message: 'Text enhancement agent initialized successfully' };
+    } catch (error) {
+      console.error('❌ Error initializing text enhancement agent:', error);
+      return { success: false, message: error.message };
+    }
   }
 
   /**
@@ -31,6 +56,11 @@ class TextEnhancementAgent {
    */
   async enhanceText(input) {
     try {
+      // Initialize if needed
+      if (!this.initialized) {
+        await this.initialize();
+      }
+
       // Validate input
       const validation = this.validateInput(input);
       if (!validation.isValid) {
@@ -53,42 +83,25 @@ class TextEnhancementAgent {
       // Create the enhancement prompt for 3 different options
       const prompt = this.createEnhancementPrompt(text, reference, enhancementConfigs);
 
-      // Get LLM response
-      console.log('🤖 Calling LLM API with provider:', this.config.llm.provider);
-      const llmResponse = await this.llmManager.generateResponse(
-        this.config.llm.provider, 
-        prompt, 
-        {
-          temperature: this.config.llm.temperature,
-          maxTokens: this.config.llm.maxTokens
-        }
-      );
-
-      console.log('📝 LLM Response success:', llmResponse.success);
-      if (!llmResponse.success) {
-        console.log('❌ LLM Error:', llmResponse.error);
-        // If API quota exceeded, provide a fallback response
-        if (llmResponse.error && (llmResponse.error.includes('quota') || llmResponse.error.includes('429') || llmResponse.error.includes('Too Many Requests'))) {
-          console.log('⚠️ API quota exceeded, using fallback enhancement');
-          const fallbackResult = this.generateFallbackEnhancement(input);
-          // Add a note about the quota issue
-          fallbackResult.message = 'Text enhanced using fallback method due to API quota limits';
-          fallbackResult.quotaExceeded = true;
-          return fallbackResult;
-        }
-        
-        return {
-          success: false,
-          error: 'Failed to generate text enhancement',
-          details: llmResponse.error
-        };
-      }
+      // Get LLM response using shared provider with Langfuse tracking
+      console.log('🤖 Generating text enhancement with LLM...');
+      const response = await llmProvider.generateText(this.llm, prompt, {
+        agentName: 'text-enhancement',
+        operation: 'enhanceText',
+        metadata: {
+          textLength: text?.length || 0,
+          hasReference: !!reference,
+          referenceLength: reference?.length || 0,
+          enhancementConfigsCount: enhancementConfigs.length
+        },
+        tags: ['text-enhancement', 'generation']
+      });
 
       console.log('✅ LLM Response received, parsing...');
-      console.log('📄 LLM Response content:', llmResponse.response?.substring(0, 200) + '...');
+      console.log('📄 LLM Response content:', response?.substring(0, 200) + '...');
 
       // Parse and validate the response
-      const parsedResponse = this.parseResponse(llmResponse.response);
+      const parsedResponse = this.parseResponse(response);
       
       if (!parsedResponse.success) {
         console.log('❌ Failed to parse LLM response:', parsedResponse.errors);
@@ -139,6 +152,22 @@ class TextEnhancementAgent {
       };
 
     } catch (error) {
+      console.error('❌ Error in text enhancement:', error);
+      
+      // If API quota exceeded, provide a fallback response
+      if (error.message && (
+        error.message.includes('quota') || 
+        error.message.includes('429') || 
+        error.message.includes('Too Many Requests')
+      )) {
+        console.log('⚠️ API quota exceeded, using fallback enhancement');
+        const fallbackResult = this.generateFallbackEnhancement(input);
+        // Add a note about the quota issue
+        fallbackResult.message = 'Text enhanced using fallback method due to API quota limits';
+        fallbackResult.quotaExceeded = true;
+        return fallbackResult;
+      }
+      
       return {
         success: false,
         error: 'Text enhancement failed',

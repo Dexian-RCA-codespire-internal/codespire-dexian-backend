@@ -1,3 +1,7 @@
+
+
+// Note: Using simple Langfuse integration (no OpenTelemetry initialization needed)
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -6,6 +10,10 @@ const http = require('http');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
+
+// Initialize Langfuse for observability
+const { initializeLangfuse } = require('./agents/shared/observability/langfuse-simple');
+initializeLangfuse();
 
 // Initialize SuperTokens
 const { initSuperTokens } = require('./config/supertokens');

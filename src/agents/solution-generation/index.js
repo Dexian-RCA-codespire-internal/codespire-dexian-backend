@@ -262,9 +262,21 @@ async function generateSolutions(currentTicket, similarTickets = [], rootCauses 
 
         console.log('🤖 Starting solution generation with LLM...');
 
-        // Generate solutions with timeout
+        // Generate solutions with timeout and Langfuse tracking
         const response = await Promise.race([
-            llmProvider.generateText(llm, prompt),
+            llmProvider.generateText(llm, prompt, {
+                agentName: 'solution-generation',
+                operation: 'generateSolutions',
+                metadata: {
+                    ticketId: currentTicket.id || 'unknown',
+                    category: currentTicket.category,
+                    similarTicketsCount: similarTickets.length,
+                    rootCausesCount: rootCauses.length,
+                    impactDataCount: impactData.length
+                },
+                tags: ['solution-generation', currentTicket.category?.toLowerCase()],
+                session: options.session
+            }),
             new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('LLM request timed out after 60 seconds')), 60000)
             )
@@ -353,7 +365,12 @@ async function getHealth() {
         const llm = llmProvider.createLLM('gemini');
         
         // Test LLM connectivity with a simple prompt
-        const testResponse = await llmProvider.generateText(llm, 'Respond with "OK" if you are working correctly.');
+        const testResponse = await llmProvider.generateText(llm, 'Respond with "OK" if you are working correctly.', {
+            agentName: 'solution-generation',
+            operation: 'healthCheck',
+            metadata: { test: true },
+            tags: ['health-check', 'solution-generation']
+        });
         
         return responseFormatting.createHealthResponse('healthy', {
             llm: testResponse.includes('OK') ? 'healthy' : 'degraded',

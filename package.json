@@ -11,8 +11,9 @@
     "test:connections": "node src/utils/testConnections.js",
     "upload:tickets": "node scripts/upload-tickets-to-qdrant.js",
     "test:upload": "node scripts/test-upload-process.js",
-    "health": "curl http://localhost:8081/health",
-    "health:detailed": "curl http://localhost:8081/health/detailed"
+    "docker:dev": "docker-compose up -d",
+    "docker:full": "docker-compose --profile full-stack up -d",
+    "docker:prod": "docker-compose --profile production up -d"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.9.1",
@@ -38,6 +39,7 @@
     "ioredis": "5.3.2",
     "joi": "17.11.0",
     "langchain": "^0.3.33",
+    "langfuse": "^3.38.5",
     "moment-timezone": "^0.6.0",
     "mongoose": "8.0.3",
     "morgan": "1.10.0",

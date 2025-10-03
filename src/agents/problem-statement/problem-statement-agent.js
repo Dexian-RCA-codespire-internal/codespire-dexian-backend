@@ -186,7 +186,16 @@ class ProblemStatementAgent {
         const prompt = this.buildPrompt(context);
         
         try {
-            const response = await providers.llm.generateText(this.llm, prompt);
+            const response = await providers.llm.generateText(this.llm, prompt, {
+                agentName: 'problem-statement',
+                operation: 'generateProblemStatement',
+                metadata: {
+                    hasDescription: !!context.description,
+                    hasServerLogs: context.serverLogs.length > 0,
+                    logCount: context.serverLogs.length
+                },
+                tags: ['problem-statement', 'generation']
+            });
 
             return this.parseLLMResponse(response);
         } catch (error) {

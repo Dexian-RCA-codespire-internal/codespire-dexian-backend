@@ -162,9 +162,19 @@ async function analyzeRootCauses(currentTicket, similarTickets = [], options = {
         // Generate analysis prompt
         const prompt = createRootCausePrompt(currentTicket, similarTickets);
 
-        // Get LLM analysis
+        // Get LLM analysis with Langfuse tracking
         console.log('🔍 Analyzing root causes...');
-        const response = await llmProvider.generateText(llm, prompt);
+        const response = await llmProvider.generateText(llm, prompt, {
+            agentName: 'rca-root-cause',
+            operation: 'analyzeRootCauses',
+            metadata: {
+                ticketId: currentTicket.id || 'unknown',
+                category: currentTicket.category,
+                similarTicketsCount: similarTickets.length
+            },
+            tags: ['root-cause-analysis', currentTicket.category?.toLowerCase()],
+            session: options.session // Pass through if provided
+        });
 
         // Parse JSON response
         let rootCauses;
