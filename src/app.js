@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const http = require('http');
-require('dotenv').config();
+// require('dotenv').config(); // Commented out to use Docker environment variables
 
 // Initialize SuperTokens
 const { initSuperTokens } = require('./config/supertokens');

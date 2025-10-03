@@ -394,7 +394,7 @@ class ServiceNowPollingService {
       );
 
       // Create query for new/updated tickets since last sync
-      const lastSyncTime = pollingState.lastSyncTime;
+      const lastSyncTime = pollingState?.lastSyncTime || new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24 hours ago
       const currentTime = new Date();
       
       // ServiceNow query for tickets created or updated since last sync

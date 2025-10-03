@@ -214,8 +214,7 @@ function calculateWeightedScore(fieldSimilarities, semanticScore, queryTicket) {
     const fieldScore = 
         (fieldSimilarities.short_description * weights.short_description) +
         (fieldSimilarities.description * weights.description) +
-        (fieldSimilarities.category * weights.category) +
-        (fieldSimilarities.source * weights.source);
+        (fieldSimilarities.category * weights.category);
     
     // Combine semantic (70%) + field-specific (30%)
     const finalScore = (normalizedSemanticScore * 0.7) + (fieldScore * 0.3);
@@ -225,10 +224,9 @@ function calculateWeightedScore(fieldSimilarities, semanticScore, queryTicket) {
     console.log('📋 Query Ticket Description Present:', hasDescription);
     console.log('⚖️  Applied Weights:', weights);
     console.log('📊 Field Similarities:', {
-        short_description: fieldSimilarities.short_description.toFixed(3),
-        description: fieldSimilarities.description.toFixed(3),
-        category: fieldSimilarities.category.toFixed(3),
-        source: fieldSimilarities.source.toFixed(3)
+        short_description: fieldSimilarities.short_description?.toFixed(3) || '0.000',
+        description: fieldSimilarities.description?.toFixed(3) || '0.000',
+        category: fieldSimilarities.category?.toFixed(3) || '0.000'
     });
     console.log('🧮 Score Breakdown:');
     console.log(`   - Semantic Score: ${normalizedSemanticScore.toFixed(3)} (70% weight)`);
@@ -236,8 +234,9 @@ function calculateWeightedScore(fieldSimilarities, semanticScore, queryTicket) {
     console.log(`   - Final Score: ${finalScore.toFixed(3)}`);
     console.log('📈 Weight Contributions:');
     for (const [field, weight] of Object.entries(weights)) {
-        const contribution = fieldSimilarities[field] * weight;
-        console.log(`   - ${field}: ${fieldSimilarities[field].toFixed(3)} × ${weight.toFixed(2)} = ${contribution.toFixed(3)}`);
+        const similarity = fieldSimilarities[field] || 0;
+        const contribution = similarity * weight;
+        console.log(`   - ${field}: ${similarity.toFixed(3)} × ${weight.toFixed(2)} = ${contribution.toFixed(3)}`);
     }
     console.log('---');
     

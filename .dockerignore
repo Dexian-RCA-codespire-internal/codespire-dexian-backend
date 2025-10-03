@@ -75,7 +75,7 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public  # Commented out to include email assets
 
 # Storybook build outputs
 .out
@@ -161,7 +161,7 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public  # Commented out to include email assets
 
 # Storybook build outputs
 .out

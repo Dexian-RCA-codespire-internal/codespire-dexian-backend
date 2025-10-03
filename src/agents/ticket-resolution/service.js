@@ -42,13 +42,13 @@ class TicketResolutionService {
                 );
             }
 
-            const rootCauseValidation = resolutionAgent.validateRootCause(rootCause);
-            if (!rootCauseValidation.isValid) {
-                return createErrorResponse(
-                    'Invalid root cause',
-                    rootCauseValidation.errors.join(', ')
-                );
-            }
+            // const rootCauseValidation = resolutionAgent.validateRootCause(rootCause);
+            // if (!rootCauseValidation.isValid) {
+            //     return createErrorResponse(
+            //         'Invalid root cause',
+            //         rootCauseValidation.errors.join(', ')
+            //     );
+            // }
 
             // Analyze ticket resolution
             const analysis = await resolutionAgent.analyzeTicketResolution(ticket, rootCause);
