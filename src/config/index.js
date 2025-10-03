@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const config = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -21,8 +23,25 @@ const config = {
     connectionURI: process.env.SUPERTOKENS_CONNECTION_URI || 'http://localhost:3567',
     apiKey: process.env.SUPERTOKENS_API_KEY,
     appName: process.env.SUPERTOKENS_APP_NAME || 'your-app-name',
-    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:8081',
-    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081'
+    appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3001',
+    apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081',
+    // Token lifetime configuration - SINGLE SOURCE OF TRUTH
+    // Set these in your .env file:
+    // ACCESS_TOKEN_MINUTES=60    (access token lifetime in minutes - 1 hour)
+    // REFRESH_TOKEN_MINUTES=1440 (refresh token lifetime in minutes - 24 hours)
+    accessTokenMinutes: parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60,
+    refreshTokenMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
+    
+    // Convert to milliseconds for application use
+    accessTokenValidity: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60 * 1000,
+    refreshTokenValidity: (parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440) * 60 * 1000,
+    
+    // Convert to seconds/minutes for SuperTokens core
+    accessTokenValiditySeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60,
+    refreshTokenValidityMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
+    
+    // For docker-compose environment variables
+    accessTokenSeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60
   },
 
   
@@ -54,24 +73,22 @@ const config = {
   // Email configuration
   email: {
     smtp: {
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      host: process.env.SMTP_HOST || "smtp-mail.outlook.com",
       port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true' || false,
-      user: process.env.SMTP_USER,
-      password: process.env.SMTP_PASSWORD,
-      fromName: process.env.SMTP_FROM_NAME || 'Test BG App',
-      fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@test-bg.com'
+      user: process.env.SMTP_USER || "pramod@codespiresolutions.com",
+      password: process.env.SMTP_PASSWORD || "sswyyhytchrsfckf",
+      fromName: process.env.SMTP_FROM_NAME || "Pramod",
+      fromEmail: process.env.SMTP_FROM_EMAIL || "pramod@codespiresolutions.com"
     },
-    // Email assets configuration
     assets: {
+      companyName: process.env.EMAIL_COMPANY_NAME || "Dexian",
+      supportEmail: process.env.EMAIL_SUPPORT_EMAIL || "support@dexian.com",
       logo: {
-        url: process.env.EMAIL_LOGO_URL || 'http://localhost:8081/public/email-asset/logo.png',
-        alt: process.env.EMAIL_LOGO_ALT || 'Dexian',
-        width: process.env.EMAIL_LOGO_WIDTH || '120',
-        height: process.env.EMAIL_LOGO_HEIGHT || '40'
-      },
-      companyName: process.env.EMAIL_COMPANY_NAME || 'Dexian',
-      supportEmail: process.env.EMAIL_SUPPORT_EMAIL || 'support@test.com'
+        alt: process.env.EMAIL_LOGO_ALT || "Dexian Logo",
+        width: process.env.EMAIL_LOGO_WIDTH || "120",
+        height: process.env.EMAIL_LOGO_HEIGHT || "auto"
+      }
     }
   },
 
@@ -89,7 +106,7 @@ const config = {
   // Rate limiting configuration
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000
   },
 
   // Logging configuration

@@ -53,7 +53,28 @@ src/
 
 ## Environment Variables
 
-See `.env.example` for all required environment variables.
+See `env.example` for all required environment variables.
+
+### SuperTokens Token Configuration
+
+You can configure access token and refresh token lifetimes using environment variables:
+
+```bash
+# Access Token Validity (in hours)
+SUPERTOKENS_ACCESS_TOKEN_VALIDITY_HOURS=24
+
+# Refresh Token Validity (in days)
+SUPERTOKENS_REFRESH_TOKEN_VALIDITY_DAYS=7
+```
+
+For detailed configuration options, see [docs/SUPERTOKENS_TOKEN_CONFIGURATION.md](docs/SUPERTOKENS_TOKEN_CONFIGURATION.md).
+
+### Testing Configuration
+
+Test your token configuration:
+```bash
+node scripts/test-token-config.js
+```
 
 ## Contributing
 

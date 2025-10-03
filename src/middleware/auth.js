@@ -1,35 +1,56 @@
 const { verifySession } = require('supertokens-node/recipe/session/framework/express');
-const { getUserById } = require('supertokens-node/recipe/emailpassword');
+const EmailVerification = require('supertokens-node/recipe/emailverification');
+const UserRoles = require('supertokens-node/recipe/userroles');
+const Session = require('supertokens-node/recipe/session');
+
+const User = require('../models/User');
+const SessionService = require('../services/sessionService');
 const config = require('../config');
 
-// Original simple authentication (for backward compatibility)
+// Basic SuperTokens session verification
 const authenticateToken = async (req, res, next) => {
   try {
     await verifySession()(req, res, next);
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid session' });
-  }
-};
-
-// Enhanced authentication with additional security checks
-const authenticateTokenEnhanced = async (req, res, next) => {
-  try {
-    await verifySession()(req, res, next);
-  } catch (error) {
+    console.error('❌ Authentication failed:', error);
     return res.status(401).json({ 
-      success: false,
       error: 'Invalid session',
-      message: 'Please login again'
+      message: 'Please log in again'
     });
   }
 };
 
-const authenticateOptional = async (req, res, next) => {
+
+
+// Require email verification
+const requireEmailVerification = async (req, res, next) => {
   try {
-    await verifySession()(req, res, next);
-  } catch (error) {
-    // Session is invalid, but we continue without user context
+    const session = req.session;
+    if (!session) {
+      return res.status(401).json({ 
+        error: 'No active session',
+        message: 'Please log in'
+      });
+    }
+
+    const userId = session.getUserId();
+    const isVerified = await EmailVerification.isEmailVerified(userId);
+    
+    if (!isVerified) {
+      return res.status(403).json({ 
+        error: 'Email not verified',
+        message: 'Please verify your email address',
+        requiresEmailVerification: true
+      });
+    }
+
     next();
+  } catch (error) {
+    console.error('❌ Email verification check failed:', error);
+    return res.status(500).json({ 
+      error: 'Verification check failed',
+      message: 'Please try again'
+    });
   }
 };
 
@@ -82,8 +103,8 @@ const logAuthenticatedRequest = (req, res, next) => {
 
 module.exports = {
   authenticateToken,
-  authenticateTokenEnhanced,
-  authenticateOptional,
+
+  requireEmailVerification,
   requireRole,
   logAuthenticatedRequest
 };

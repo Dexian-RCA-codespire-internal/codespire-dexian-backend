@@ -3,7 +3,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const http = require('http');
-// require('dotenv').config(); // Commented out to use Docker environment variables
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
 
 // Initialize SuperTokens
 const { initSuperTokens } = require('./config/supertokens');
@@ -47,10 +49,93 @@ app.use(cors({
 }));
 app.use(morgan('combined'));
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// SuperTokens middleware
+// Security middleware - global helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://cdn.jsdelivr.net", "https://purecatamphetamine.github.io", "https://*.githubusercontent.com", "https://flagcdn.com"],
+      connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+}));
+
+// Disable CSP completely for SuperTokens dashboard
+app.use("/auth/dashboard", helmet({ contentSecurityPolicy: false }));
+app.use("/auth", helmet({ 
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "*"],
+      connectSrc: ["'self'", "*"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"],
+    },
+  },
+}));
+
+// Production logging
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined', {
+    skip: function (req, res) { return res.statusCode < 400 },
+    stream: {
+      write: function(message) {
+        console.log(message.trim());
+      }
+    }
+  }));
+} else {
+  app.use(morgan('dev'));
+}
+
+// SuperTokens imports
+const supertokens = require('supertokens-node');
 const { middleware, errorHandler } = require('supertokens-node/framework/express');
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000000, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000)
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting to all requests
+app.use(limiter);
+
+// Consolidated CORS configuration with SuperTokens support
+const corsOrigins = process.env.CORS_ORIGINS ? 
+  process.env.CORS_ORIGINS.split(',') : 
+  [config.supertokens.appDomain, "http://localhost:3001"];
+
+app.use(
+  cors({
+    origin: corsOrigins,
+    allowedHeaders: ['content-type', ...supertokens.getAllCORSHeaders()],
+    methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    optionsSuccessStatus: 200 // For legacy browser support
+  })
+);
+
+// SuperTokens middleware BEFORE custom routes (Pattern 1: Top-level mount)
 app.use(middleware());
 
 // Debug: Log all incoming requests
@@ -83,7 +168,9 @@ app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
@@ -109,6 +196,48 @@ app.get('/debug/polling', async (req, res) => {
   }
 });
 
+// Detailed health check for monitoring
+app.get('/health/detailed', async (req, res) => {
+  const health = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0',
+    services: {
+      mongodb: 'unknown',
+      qdrant: 'unknown',
+      supertokens: 'unknown',
+      servicenow: 'unknown'
+    }
+  };
+
+  try {
+    // Check MongoDB
+    const mongoose = require('mongoose');
+    health.services.mongodb = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  } catch (error) {
+    health.services.mongodb = 'error';
+  }
+
+  try {
+    // Check SuperTokens Core
+    const response = await fetch('http://localhost:3567/hello');
+    health.services.supertokens = response.ok ? 'connected' : 'disconnected';
+  } catch (error) {
+    health.services.supertokens = 'error';
+  }
+
+  // Check if any service is down
+  const hasErrors = Object.values(health.services).some(status => status === 'error' || status === 'disconnected');
+  if (hasErrors) {
+    health.status = 'DEGRADED';
+    res.status(503);
+  }
+
+  res.json(health);
+});
+
 // Setup Swagger documentation
 const { setupSwagger } = require('./swagger');
 setupSwagger(app, PORT);
@@ -119,81 +248,147 @@ app.use('/email-assets', express.static('public/email-assets'));
 // API routes
 app.use('/api/v1', require('./routes'));
 
-// Note: Password reset is now handled via OTP through /api/v1/auth routes
-
-// SuperTokens routes should be handled by middleware, but let's add a fallback
-app.get('/auth/*', (req, res, next) => {
-  console.log(`🔍 SuperTokens route accessed: ${req.path}`);
-  // Let SuperTokens middleware handle this
-  next();
-});
-
-// Test route to verify SuperTokens is working
-app.get('/auth/test', (req, res) => {
-  res.json({ message: 'SuperTokens route is working' });
-});
 
 
-// Custom handler for verify-email route
-app.get('/auth/verify-email', async (req, res) => {
+// Single consolidated session endpoint for SuperTokens compatibility
+app.get('/auth/session', async (req, res) => {
   try {
-    console.log('🔍 Custom verify-email route accessed');
-    const { token, rid, tenantId } = req.query;
+    console.log('🔍 Session endpoint called');
+    
+    // Use SuperTokens Session recipe to get session
+    const Session = require('supertokens-node/recipe/session');
+    
+    try {
+      const session = await Session.getSession(req, res, { sessionRequired: false });
+      
+      if (session) {
+        console.log('✅ Valid session found for user:', session.getUserId());
+        
+        // Check if user still exists in SuperTokens
+        try {
+          const EmailPassword = require('supertokens-node/recipe/emailpassword');
+          const user = await EmailPassword.getUserById(session.getUserId());
+          
+          if (!user) {
+            console.log('❌ User no longer exists in SuperTokens, invalidating session');
+            await Session.revokeSession(session.getHandle());
+            return res.status(401).json({
+              status: 'UNAUTHORISED',
+              message: 'User no longer exists'
+            });
+          }
+          
+          const payload = session.getAccessTokenPayload();
+          const userRole = payload.role || 'user';
+          
+          return res.status(200).json({
+            status: 'OK',
+            session: {
+              userId: session.getUserId(),
+              role: userRole,
+              email: payload.email || '',
+              name: payload.name || '',
+              sessionHandle: session.getHandle(),
+              tenantId: session.getTenantId(),
+              accessTokenPayload: payload
+            }
+          });
+        } catch (userCheckError) {
+          console.log('❌ Error checking user existence:', userCheckError.message);
+          try {
+            await Session.revokeSession(session.getHandle());
+          } catch (revokeError) {
+            console.log('⚠️ Error revoking session:', revokeError.message);
+          }
+          return res.status(401).json({
+            status: 'UNAUTHORISED',
+            message: 'Session validation failed'
+          });
+        }
+      } else {
+        console.log('❌ No valid session found');
+        return res.status(401).json({
+          status: 'UNAUTHORISED',
+          message: 'No valid session found'
+        });
+      }
+    } catch (sessionError) {
+      console.log('❌ Session verification failed:', sessionError.message);
+      return res.status(401).json({
+        status: 'UNAUTHORISED',
+        message: 'Session verification failed'
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error in session endpoint:', error);
+    return res.status(500).json({
+      status: 'INTERNAL_SERVER_ERROR',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Compatibility route for /api/v1/auth/session (redirects to main session endpoint)
+app.get('/api/v1/auth/session', async (req, res) => {
+  // Redirect to the main session endpoint to avoid duplication
+  req.url = '/auth/session';
+  return app._router.handle(req, res);
+});
+
+// Custom email verification route for magic links (moved to avoid SuperTokens conflicts)
+app.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
     
     if (!token) {
-      return res.status(400).json({ error: 'Token is required' });
+      return res.status(400).json({
+        error: 'Verification token is required',
+        message: 'Please provide a valid verification token'
+      });
     }
-    
-    // Import SuperTokens functions
+
+    console.log('🔍 Email verification attempt with token:', token);
+
+    // Use SuperTokens to verify the email
     const EmailVerification = require('supertokens-node/recipe/emailverification');
     const supertokens = require('supertokens-node');
     
     try {
-      // Verify the email using SuperTokens
-      const verifyRes = await EmailVerification.verifyEmailUsingToken("public", token);
+      const response = await EmailVerification.verifyEmailUsingToken("public", token);
       
-      if (verifyRes.status === "OK") {
-        // Update local database
-        const User = require('./models/User');
-        const user = await User.findBySupertokensUserId(verifyRes.user.id);
-        if (user) {
-          user.isEmailVerified = true;
-          user.emailVerifiedAt = new Date();
-          await user.save();
-        }
+      if (response.status === "OK") {
+        console.log('✅ Email verified successfully for user:', response.userId);
         
-        // Return success page
-        const html = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Email Verified</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-              .success { color: green; }
-              .container { max-width: 500px; margin: 0 auto; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1 class="success">✅ Email Verified Successfully!</h1>
-              <p>Your email has been verified. You can now log in to your account.</p>
-              <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}">Go to Login Page</a></p>
-            </div>
-          </body>
-          </html>
-        `;
-        res.send(html);
+        // Send welcome email
+        const emailService = require('./services/emailService');
+        await emailService.sendWelcomeEmail(response.user.email, response.user.email);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Email verified successfully! You can now login.',
+          userId: response.userId,
+          email: response.user.email
+        });
       } else {
-        res.status(400).json({ error: 'Invalid or expired token' });
+        console.log('❌ Email verification failed:', response);
+        return res.status(400).json({
+          error: 'Email verification failed',
+          message: 'Invalid or expired verification token'
+        });
       }
     } catch (error) {
-      console.error('Email verification error:', error);
-      res.status(400).json({ error: 'Email verification failed' });
+      console.error('❌ Email verification error:', error);
+      return res.status(400).json({
+        error: 'Email verification failed',
+        message: error.message || 'Invalid or expired verification token'
+      });
     }
   } catch (error) {
-    console.error('Verify email route error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Email verification route error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Something went wrong during email verification'
+    });
   }
 });
 
@@ -202,11 +397,37 @@ app.use(errorHandler());
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  // Log error details
+  console.error('🚨 Error occurred:', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    userAgent: req.get('user-agent'),
+    ip: req.ip
   });
+
+  // Determine error status code
+  const statusCode = err.statusCode || err.status || 500;
+  
+  // Prepare error response
+  const errorResponse = {
+    error: 'Something went wrong!',
+    timestamp: new Date().toISOString(),
+    requestId: req.headers['x-request-id'] || 'unknown'
+  };
+
+  // Add detailed error message in development
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.message = err.message;
+    errorResponse.stack = err.stack;
+  } else {
+    // In production, only show generic message
+    errorResponse.message = 'Internal server error';
+  }
+
+  res.status(statusCode).json(errorResponse);
 });
 
 // 404 handler
@@ -341,4 +562,7 @@ server.listen(PORT, async () => {
   }
 });
 
-module.exports = { app, server };
+// SuperTokens error handler (must be last)
+app.use(errorHandler());
+
+module.exports = app;
