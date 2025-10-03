@@ -394,14 +394,28 @@ function applyBusinessRules(results, queryTicket, options = {}) {
  */
 async function generateSimilarityExplanation(inputTicket, similarTickets) {
     try {
+        // Initialize if needed
+        if (!initialized) {
+            await initialize();
+        }
+        
         if (!llm || !similarTickets || similarTickets.length === 0) {
             return null;
         }
         
         const prompt = createExplanationPrompt(inputTicket, similarTickets);
-        const response = await llm.invoke(prompt);
+        const response = await providers.llm.generateText(llm, prompt, {
+            agentName: 'ticket-similarity',
+            operation: 'generateExplanation',
+            metadata: {
+                inputTicketId: inputTicket.ticket_id || 'unknown',
+                similarTicketsCount: similarTickets.length,
+                category: inputTicket.category
+            },
+            tags: ['ticket-similarity', 'explanation', inputTicket.category?.toLowerCase()]
+        });
         
-        return response.content;
+        return response;
     } catch (error) {
         console.error('❌ Error generating explanation:', error);
         return null;
@@ -446,7 +460,7 @@ async function healthCheck() {
             await initialize();
         }
         
-        // Test embedding generation
+        // Test embedding generation with Langfuse tracking
         await embeddings.embedQuery('test query');
         
         // Test Qdrant connection

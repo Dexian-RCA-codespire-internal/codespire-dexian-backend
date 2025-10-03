@@ -51,7 +51,15 @@ class TicketResolutionAgent {
             const prompt = this.createResolutionAnalysisPrompt(problemStatement, rootCause);
             
             // Get LLM analysis
-            const analysis = await llmProvider.generateText(this.llm, prompt);
+            const analysis = await llmProvider.generateText(this.llm, prompt, {
+                agentName: 'ticket-resolution',
+                operation: 'analyzeResolution',
+                metadata: {
+                    hasProblemStatement: !!problemStatement,
+                    hasRootCause: !!rootCause
+                },
+                tags: ['ticket-resolution', 'analysis']
+            });
 
             // Parse the response
             const parsedAnalysis = this.parseResolutionAnalysis(analysis);

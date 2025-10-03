@@ -10,23 +10,30 @@ class EmailService {
 
   initializeTransporter() {
     try {
-        this.transporter = nodemailer.createTransport({
-          host: config.email.smtp.host,
-          port: config.email.smtp.port,
-          secure: config.email.smtp.port === 465, // true for 465, false for other ports
-          auth: config.email.smtp.user ? {
-            user: config.email.smtp.user,
-            pass: config.email.smtp.password
-          } : undefined,
-          tls: {
-            rejectUnauthorized: false,
-            ciphers: 'SSLv3'
-          },
-          requireTLS: config.email.smtp.port === 587, // true for port 587
-          connectionTimeout: 60000,
-          greetingTimeout: 30000,
-          socketTimeout: 60000
-        });
+
+      this.transporter = nodemailer.createTransport({
+        host: config.email.smtp.host,
+        port: config.email.smtp.port,
+        secure: config.email.smtp.secure, // Use configured secure value
+        auth: config.email.smtp.user ? {
+          user: config.email.smtp.user,
+          pass: config.email.smtp.password
+        } : undefined,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        },
+        requireTLS: true, // Always require TLS for security
+        connectionTimeout: 60000,
+        greetingTimeout: 30000,
+        socketTimeout: 60000,
+        // Additional Outlook-specific settings
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        debug: false, // Disable debug to reduce noise
+        logger: false // Disable logging to reduce noise
+      });
 
       console.log('📧 Email service initialized');
     } catch (error) {
@@ -40,7 +47,13 @@ class EmailService {
         throw new Error('Email transporter not initialized');
       }
 
-      console.log(process.env.SMTP_USER, process.env.SMTP_PASSWORD)
+      console.log('📧 Preparing to send OTP email...');
+      console.log('📧 To:', email);
+      console.log('📧 From:', `"${config.email.smtp.fromName}" <${config.email.smtp.fromEmail}>`);
+      console.log('📧 SMTP Host:', config.email.smtp.host);
+      console.log('📧 SMTP Port:', config.email.smtp.port);
+      console.log('📧 SMTP User:', config.email.smtp.user);
+      
       const mailOptions = {
         from: `"${config.email.smtp.fromName}" <${config.email.smtp.fromEmail}>`,
         to: email,
@@ -50,17 +63,48 @@ class EmailService {
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ OTP email sent successfully:', result.messageId);
+      
+      console.log('✅ Email sent successfully!');
+      console.log('📬 Message ID:', result.messageId);
+      console.log('📬 Response:', result.response);
+      console.log('📬 Accepted:', result.accepted);
+      console.log('📬 Rejected:', result.rejected);
+      
+      if (result.rejected && result.rejected.length > 0) {
+        console.warn('⚠️ Some recipients were rejected:', result.rejected);
+        console.warn('⚠️ This means the email server rejected these addresses');
+      }
+      
+      // Additional delivery information
+      if (result.messageTime) {
+        console.log('⏱️ Message processing time:', result.messageTime, 'ms');
+      }
+      
+      // Log delivery suggestions
+      console.log('💡 Email delivery tips:');
+      console.log('   - Check spam/junk folder in recipient email');
+      console.log('   - Email may take 1-15 minutes to arrive');
+      console.log('   - Gmail may filter emails from new domains');
       
       return {
         success: true,
-        messageId: result.messageId
+        messageId: result.messageId,
+        response: result.response,
+        accepted: result.accepted,
+        rejected: result.rejected
       };
     } catch (error) {
-      console.error('❌ Failed to send OTP email:', error);
+      console.error('❌ Failed to send OTP email:');
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Full error:', error);
+      
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        code: error.code,
+        response: error.response
       };
     }
   }

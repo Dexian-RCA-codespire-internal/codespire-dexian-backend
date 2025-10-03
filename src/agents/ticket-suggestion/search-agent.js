@@ -54,10 +54,19 @@ async function generateTicketSuggestions(similarTickets, currentTicket = null) {
         }
         
         const prompt = createSuggestionsPrompt(similarTickets, currentTicket);
-        const response = await llm.invoke(prompt);
+        const response = await providers.llm.generateText(llm, prompt, {
+            agentName: 'ticket-suggestion',
+            operation: 'generateSuggestions',
+            metadata: {
+                ticketId: currentTicket?.id || 'unknown',
+                category: currentTicket?.category,
+                similarTicketsCount: similarTickets?.length || 0
+            },
+            tags: ['ticket-suggestion', 'generation', currentTicket?.category?.toLowerCase()]
+        });
         
         // Parse the response to extract suggestions
-        const suggestions = parseSuggestionsResponse(response.content);
+        const suggestions = parseSuggestionsResponse(response);
         
         return suggestions;
     } catch (error) {

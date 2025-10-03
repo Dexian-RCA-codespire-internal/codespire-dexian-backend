@@ -17,6 +17,8 @@ const responseFormatting = require('./utils/response-formatting');
 
 // Configuration
 const defaultConfig = require('./config/default-config');
+// Observability - Use simple approach by default
+const observability = require('./observability/langfuse-simple');
 
 module.exports = {
     // Provider utilities
@@ -39,6 +41,8 @@ module.exports = {
     
     // Configuration
     config: defaultConfig,
+    // Observability
+    observability,
     
     // Quick access to commonly used functions
     createLLM: llmProvider.createLLM,

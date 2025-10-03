@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Enhanced User model - stores essential data in MongoDB while leveraging SuperTokens for auth
 const userSchema = new mongoose.Schema({
   supertokensUserId: {
     type: String,
@@ -7,69 +8,82 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  // Store email for quick queries (also in SuperTokens)
   email: {
     type: String,
     required: true,
-    unique: true,
     lowercase: true,
-    trim: true
+    index: true
   },
+  // User profile information
   name: {
     type: String,
-    required: true,
-    trim: true
+    default: ''
   },
   firstName: {
     type: String,
-    trim: true
+    default: ''
   },
   lastName: {
     type: String,
-    trim: true
+    default: ''
   },
   phone: {
     type: String,
-    trim: true
+    default: ''
   },
   role: {
     type: String,
-    enum: ['user', 'admin', 'moderator'],
-    default: 'user'
+    default: 'admin',
+    enum: ['user', 'admin', 'moderator', 'support']
+  },
+  roles: [{
+    type: String,
+    enum: ['user', 'admin', 'moderator', 'support']
+  }],
+  status: {
+    type: String,
+    default: 'active',
+    enum: ['active', 'inactive', 'suspended']
+  },
+  // Authentication and session tracking
+  lastLoginAt: {
+    type: Date
+  },
+  lastLogoutAt: {
+    type: Date
+  },
+  sessionCount: {
+    type: Number,
+    default: 0
+  },
+  activeSessions: [{
+    sessionHandle: String,
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    lastActivity: {
+      type: Date,
+      default: Date.now
+    },
+    userAgent: String,
+    ipAddress: String,
+    deviceInfo: {
+      type: String,
+      default: 'Unknown'
+    }
+  }],
+  // User status for business logic
+  isActive: {
+    type: Boolean,
+    default: true
   },
   isEmailVerified: {
     type: Boolean,
     default: false
   },
-  emailVerificationOTP: {
-    code: String,
-    expiresAt: Date
-  },
-  passwordResetOTP: {
-    code: String,
-    expiresAt: Date
-  },
-  passwordResetToken: {
-    token: String,
-    expiresAt: Date
-  },
-  otp: {
-    type: String
-  },
-  otpExpiry: {
-    type: Date
-  },
-  magicLinkToken: {
-    type: String
-  },
-  magicLinkExpiry: {
-    type: Date
-  },
-  lastLoginAt: {
-    type: Date
-  },
-  profilePicture: {
-    type: String
-  },
+  // Keep preferences in MongoDB for complex queries
   preferences: {
     theme: {
       type: String,
@@ -85,100 +99,146 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true
       }
+    },
+    language: {
+      type: String,
+      default: 'en'
     }
   },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'suspended'],
-    default: 'active'
+  // Audit fields
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
 
 // Indexes
-userSchema.index({ email: 1 });
 userSchema.index({ supertokensUserId: 1 });
 userSchema.index({ createdAt: -1 });
 
 // Instance methods
 userSchema.methods.toJSON = function() {
-  const user = this.toObject();
-  delete user.emailVerificationOTP;
-  return user;
+  return this.toObject();
 };
 
-userSchema.methods.generateOTP = function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const config = require('../config');
-  const expiresAt = new Date(Date.now() + config.otp.expiryMinutes * 60 * 1000);
-  
-  this.emailVerificationOTP = {
-    code: otp,
-    expiresAt: expiresAt
-  };
-  
-  // Also set the otp field for SuperTokensOTPService compatibility
-  this.otp = otp;
-  this.otpExpiry = expiresAt;
-  
-  return otp;
-};
-
-userSchema.methods.verifyOTP = function(otp) {
-  // Check both emailVerificationOTP and otp fields for compatibility
-  const otpCode = this.emailVerificationOTP?.code || this.otp;
-  const otpExpiry = this.emailVerificationOTP?.expiresAt || this.otpExpiry;
-  
-  if (!otpCode) {
-    return false;
-  }
-  
-  if (otpExpiry && new Date() > otpExpiry) {
-    return false;
-  }
-  
-  return otpCode === otp;
-};
-
-userSchema.methods.markEmailVerified = function() {
-  this.isEmailVerified = true;
-  this.emailVerificationOTP = undefined;
-  this.otp = undefined;
-  this.otpExpiry = undefined;
-  this.magicLinkToken = undefined;
-  this.magicLinkExpiry = undefined;
-};
-
-// Static methods
-userSchema.statics.findByEmail = function(email) {
-  return this.findOne({ email: email.toLowerCase() });
-};
-
+// Static methods to work with SuperTokens
 userSchema.statics.findBySupertokensUserId = function(supertokensUserId) {
-  return this.findOne({ supertokensUserId });
+  return this.findOne({ supertokensUserId, deletedAt: null });
 };
 
-userSchema.statics.createUser = async function(supertokensUserId, email, name, firstName = null, lastName = null, phone = null) {
-  const user = new this({
+userSchema.statics.findByEmail = function(email) {
+  return this.findOne({ email: email.toLowerCase(), deletedAt: null });
+};
+
+userSchema.statics.createUser = async function(supertokensUserId, email, userData = {}) {
+  const { preferences = {}, ...otherData } = userData;
+  
+  return this.create({
     supertokensUserId,
     email: email.toLowerCase(),
-    name,
-    firstName,
-    lastName,
-    phone
+    name: otherData.name || '',
+    firstName: otherData.firstName || '',
+    lastName: otherData.lastName || '',
+    phone: otherData.phone || '',
+    role: otherData.role || 'admin',
+    roles: otherData.roles || ['admin'],
+    status: otherData.status || 'active',
+    isActive: otherData.isActive !== false,
+    isEmailVerified: otherData.isEmailVerified || false,
+    preferences: {
+      theme: preferences.theme || 'light',
+      notifications: {
+        email: preferences.notifications?.email !== false,
+        push: preferences.notifications?.push !== false
+      },
+      language: preferences.language || 'en'
+    },
+    lastLoginAt: new Date()
   });
-  
-  return await user.save();
 };
 
-// Pre-save middleware
-userSchema.pre('save', function(next) {
-  if (this.isModified('email')) {
-    this.email = this.email.toLowerCase();
+// Instance methods
+userSchema.methods.updateLastLogin = function() {
+  this.lastLoginAt = new Date();
+  this.sessionCount = (this.sessionCount || 0) + 1;
+  return this.save();
+};
+
+userSchema.methods.addActiveSession = function(sessionData) {
+  const { sessionHandle, userAgent, ipAddress, deviceInfo } = sessionData;
+  
+  // Remove any existing session with the same handle
+  this.activeSessions = this.activeSessions.filter(
+    session => session.sessionHandle !== sessionHandle
+  );
+  
+  // Add new session
+  this.activeSessions.push({
+    sessionHandle,
+    userAgent,
+    ipAddress,
+    deviceInfo: deviceInfo || 'Unknown',
+    createdAt: new Date(),
+    lastActivity: new Date()
+  });
+  
+  return this.save();
+};
+
+userSchema.methods.removeActiveSession = function(sessionHandle) {
+  this.activeSessions = this.activeSessions.filter(
+    session => session.sessionHandle !== sessionHandle
+  );
+  return this.save();
+};
+
+userSchema.methods.updateSessionActivity = function(sessionHandle) {
+  const session = this.activeSessions.find(
+    s => s.sessionHandle === sessionHandle
+  );
+  
+  if (session) {
+    session.lastActivity = new Date();
+    return this.save();
   }
-  next();
-});
+  
+  return Promise.resolve(this);
+};
+
+userSchema.methods.clearAllSessions = function() {
+  this.activeSessions = [];
+  this.lastLogoutAt = new Date();
+  return this.save();
+};
+
+userSchema.methods.softDelete = function() {
+  this.deletedAt = new Date();
+  this.isActive = false;
+  return this.save();
+};
+
+userSchema.methods.restore = function() {
+  this.deletedAt = null;
+  this.isActive = true;
+  return this.save();
+};
+
+userSchema.methods.updateEmailVerificationStatus = function(isVerified = true) {
+  this.isEmailVerified = isVerified;
+  return this.save();
+};
+
+// Static method to update email verification status by SuperTokens userId
+userSchema.statics.updateEmailVerificationBySupertokensUserId = async function(supertokensUserId, isVerified = true) {
+  const user = await this.findBySupertokensUserId(supertokensUserId);
+  if (user) {
+    user.isEmailVerified = isVerified;
+    return await user.save();
+  }
+  return null;
+};
 
 const User = mongoose.model('User', userSchema);
 

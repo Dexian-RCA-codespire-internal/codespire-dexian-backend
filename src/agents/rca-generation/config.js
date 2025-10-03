@@ -9,7 +9,7 @@ const { config: defaultConfig } = require('../shared');
 const config = defaultConfig.createRAGAgentConfig('rca-generation', {
     // LLM settings for technical RCA generation
     llm: {
-        model: 'gemini-2.0-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
         temperature: 0.4,
         maxTokens: 2000
     },
