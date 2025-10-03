@@ -868,6 +868,81 @@ const cleanupUserSessions = async (req, res) => {
   }
 };
 
+/**
+ * Force logout - revoke all sessions and clear all data
+ */
+const forceLogout = async (req, res) => {
+  try {
+    console.log('🚪 Force logout initiated');
+    
+    // Get session info if available
+    let sessionHandle = null;
+    let userId = null;
+    
+    try {
+      if (req.session) {
+        sessionHandle = req.session.getHandle();
+        userId = req.session.getUserId();
+        console.log(`🚪 Force logout for user ${userId}, session: ${sessionHandle}`);
+      }
+    } catch (sessionError) {
+      console.log('⚠️ No valid session found for force logout');
+    }
+    
+    // Revoke all sessions for this user if we have userId
+    if (userId) {
+      try {
+        const Session = require('supertokens-node/recipe/session');
+        const existingSessions = await Session.getAllSessionHandlesForUser(userId);
+        
+        if (existingSessions && existingSessions.length > 0) {
+          console.log(`🚫 Revoking ${existingSessions.length} sessions for user ${userId}`);
+          for (const handle of existingSessions) {
+            try {
+              await Session.revokeSession(handle);
+              console.log(`✅ Revoked session: ${handle}`);
+            } catch (revokeError) {
+              console.warn(`⚠️ Could not revoke session ${handle}:`, revokeError.message);
+            }
+          }
+        }
+      } catch (revokeError) {
+        console.warn('⚠️ Error revoking user sessions:', revokeError.message);
+      }
+    }
+    
+    // Clean up MongoDB sessions
+    if (userId) {
+      try {
+        const User = require('../models/User');
+        await User.updateOne(
+          { supertokensUserId: userId },
+          { $unset: { activeSessions: 1 } }
+        );
+        console.log(`✅ Cleaned up MongoDB sessions for user ${userId}`);
+      } catch (mongoError) {
+        console.warn('⚠️ Error cleaning up MongoDB sessions:', mongoError.message);
+      }
+    }
+    
+    console.log('✅ Force logout completed');
+    
+    res.json({
+      success: true,
+      message: 'Force logout completed successfully',
+      sessionsRevoked: userId ? true : false
+    });
+    
+  } catch (error) {
+    console.error('❌ Error during force logout:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Force logout failed',
+      message: 'Internal server error during logout'
+    });
+  }
+};
+
 module.exports = {
   createUser,
   updateUser,
@@ -882,6 +957,7 @@ module.exports = {
   getUserActiveSessions,
   revokeAllUserSessions,
   refreshUserSession,
+  forceLogout,
   getCurrentSessionInfo,
   getCurrentUserActiveSessions,
   syncUserSessions,

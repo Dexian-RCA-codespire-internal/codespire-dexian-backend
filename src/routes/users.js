@@ -826,6 +826,37 @@ router.post('/session/refresh', getUserRole, userController.refreshUserSession);
 
 /**
  * @swagger
+ * /api/v1/users/logout:
+ *   post:
+ *     summary: Force logout user
+ *     description: Force logout user by revoking all sessions and clearing all data
+ *     tags: [Users]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Force logout successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Force logout completed successfully"
+ *                 sessionsRevoked:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/logout', userController.forceLogout);
+
+/**
+ * @swagger
  * /api/v1/users/session/info:
  *   get:
  *     summary: Get current session information
