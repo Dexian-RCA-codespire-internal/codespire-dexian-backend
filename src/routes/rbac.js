@@ -3,6 +3,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const RBACController = require('../controllers/rbacController');
 const { authenticateToken, requireRole, requirePermission } = require('../middleware/auth');
+const { doc } = require('../utils/apiDoc');
 
 const router = express.Router();
 
@@ -27,30 +28,110 @@ const assignPermissionValidation = [
 ];
 
 // Role management routes
-router.post('/roles', authenticateToken, requirePermission('roles:write'), createRoleValidation, RBACController.createRole);
-router.get('/roles', authenticateToken, requirePermission('roles:read'), RBACController.getAllRoles);
-router.post('/roles/assign', authenticateToken, requirePermission('roles:write'), assignRoleValidation, RBACController.assignRoleToUser);
-router.post('/roles/remove', authenticateToken, requirePermission('roles:write'), assignRoleValidation, RBACController.removeRoleFromUser);
-router.get('/roles/:userId', authenticateToken, requirePermission('roles:read'), RBACController.getUserRoles);
-router.get('/roles/check/:userId/:role', authenticateToken, requirePermission('roles:read'), RBACController.checkUserRole);
-router.get('/roles/users/:role', authenticateToken, requirePermission('roles:read'), RBACController.getUsersWithRole);
+router.post('/roles', 
+  authenticateToken, 
+  requirePermission('roles:write'), 
+  doc.create('/rbac/roles', 'Create a new role', ['RBAC']),
+  createRoleValidation, 
+  RBACController.createRole);
+
+router.get('/roles', 
+  authenticateToken, 
+  requirePermission('roles:read'), 
+  doc.getList('/rbac/roles', 'Get all roles', ['RBAC']),
+  RBACController.getAllRoles);
+
+router.post('/roles/assign', 
+  authenticateToken, 
+  requirePermission('roles:write'), 
+  doc.create('/rbac/roles/assign', 'Assign role to user', ['RBAC']),
+  assignRoleValidation, 
+  RBACController.assignRoleToUser);
+
+router.post('/roles/remove', 
+  authenticateToken, 
+  requirePermission('roles:write'), 
+  doc.create('/rbac/roles/remove', 'Remove role from user', ['RBAC']),
+  assignRoleValidation, 
+  RBACController.removeRoleFromUser);
+
+router.get('/roles/:userId', 
+  authenticateToken, 
+  requirePermission('roles:read'), 
+  doc.getById('/rbac/roles/{userId}', 'Get user roles', ['RBAC']),
+  RBACController.getUserRoles);
+
+router.get('/roles/check/:userId/:role', 
+  authenticateToken, 
+  requirePermission('roles:read'), 
+  doc.getById('/rbac/roles/check/{userId}/{role}', 'Check if user has specific role', ['RBAC']),
+  RBACController.checkUserRole);
+
+router.get('/roles/users/:role', 
+  authenticateToken, 
+  requirePermission('roles:read'), 
+  doc.getById('/rbac/roles/users/{role}', 'Get all users with specific role', ['RBAC']),
+  RBACController.getUsersWithRole);
 
 // Permission management routes
-router.post('/permissions', authenticateToken, requirePermission('permissions:write'), createPermissionValidation, RBACController.createPermission);
-router.get('/permissions', authenticateToken, requirePermission('permissions:read'), RBACController.getAllPermissions);
-router.post('/permissions/assign', authenticateToken, requirePermission('permissions:write'), assignPermissionValidation, RBACController.assignPermissionToRole);
-router.post('/permissions/remove', authenticateToken, requirePermission('permissions:write'), assignPermissionValidation, RBACController.removePermissionFromRole);
-router.get('/permissions/:userId', authenticateToken, requirePermission('permissions:read'), RBACController.getUserPermissions);
-router.get('/permissions/check/:userId/:permission', authenticateToken, requirePermission('permissions:read'), RBACController.checkUserPermission);
+router.post('/permissions', 
+  authenticateToken, 
+  requirePermission('permissions:write'), 
+  doc.create('/rbac/permissions', 'Create a new permission', ['RBAC']),
+  createPermissionValidation, 
+  RBACController.createPermission);
+
+router.get('/permissions', 
+  authenticateToken, 
+  requirePermission('permissions:read'), 
+  doc.getList('/rbac/permissions', 'Get all permissions', ['RBAC']),
+  RBACController.getAllPermissions);
+
+router.post('/permissions/assign', 
+  authenticateToken, 
+  requirePermission('permissions:write'), 
+  doc.create('/rbac/permissions/assign', 'Assign permission to role', ['RBAC']),
+  assignPermissionValidation, 
+  RBACController.assignPermissionToRole);
+
+router.post('/permissions/remove', 
+  authenticateToken, 
+  requirePermission('permissions:write'), 
+  doc.create('/rbac/permissions/remove', 'Remove permission from role', ['RBAC']),
+  assignPermissionValidation, 
+  RBACController.removePermissionFromRole);
+
+router.get('/permissions/:userId', 
+  authenticateToken, 
+  requirePermission('permissions:read'), 
+  doc.getById('/rbac/permissions/{userId}', 'Get user permissions', ['RBAC']),
+  RBACController.getUserPermissions);
+
+router.get('/permissions/check/:userId/:permission', 
+  authenticateToken, 
+  requirePermission('permissions:read'), 
+  doc.getById('/rbac/permissions/check/{userId}/{permission}', 'Check if user has specific permission', ['RBAC']),
+  RBACController.checkUserPermission);
 
 // User RBAC management
-router.get('/users/:userId/sync', authenticateToken, requirePermission('users:read'), RBACController.syncUserRBAC);
+router.get('/users/:userId/sync', 
+  authenticateToken, 
+  requirePermission('users:read'), 
+  doc.getById('/rbac/users/{userId}/sync', 'Sync user RBAC data', ['RBAC']),
+  RBACController.syncUserRBAC);
 
 // Initialize default roles and permissions (admin only)
-router.post('/initialize', authenticateToken, requirePermission('roles:write'), RBACController.initializeDefaults);
+router.post('/initialize', 
+  authenticateToken, 
+  requirePermission('roles:write'), 
+  doc.create('/rbac/initialize', 'Initialize default roles and permissions', ['RBAC']),
+  RBACController.initializeDefaults);
 
 // Debug endpoint to check current user's roles and permissions
-router.get('/debug/current-user', authenticateToken, async (req, res) => {
+router.get('/debug/current-user', 
+  authenticateToken, 
+  doc.getById('/rbac/debug/current-user', 'Get current user roles and permissions (debug)', ['RBAC']),
+  async (req, res) => {
   try {
     const userId = req.session.getUserId();
     const RBACService = require('../services/rbacService');
@@ -78,7 +159,9 @@ router.get('/debug/current-user', authenticateToken, async (req, res) => {
 });
 
 // Debug endpoint without authentication to check session status
-router.get('/debug/session', async (req, res) => {
+router.get('/debug/session', 
+  doc.getById('/rbac/debug/session', 'Check session status (debug)', ['RBAC']),
+  async (req, res) => {
   try {
     console.log('🔍 Debug: Checking session status');
     console.log('🔍 Headers:', req.headers);
@@ -128,7 +211,9 @@ router.get('/debug/session', async (req, res) => {
 });
 
 // Debug endpoint to test role assignment (no auth required for testing)
-router.post('/debug/assign-role', async (req, res) => {
+router.post('/debug/assign-role', 
+  doc.create('/rbac/debug/assign-role', 'Assign role to user (debug)', ['RBAC']),
+  async (req, res) => {
   try {
     const { userId, role } = req.body;
     
