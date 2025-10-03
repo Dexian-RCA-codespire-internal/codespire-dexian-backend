@@ -73,11 +73,56 @@ class TicketVectorizationService {
     // Note: ensureCollectionExists() is now handled by shared utility in initialize()
 
     /**
-     * Create text representation for embedding using shared utility
+     * Create text representation for embedding using dynamic weights
+     * If description is present: use normal weights
+     * If description is missing: give 70% weight to short_description
      */
     createTicketText(ticket) {
+        // Check if description field exists and has content
+        const hasDescription = ticket.description && ticket.description.trim().length > 0;
+        
+        let weights;
+        
+        if (hasDescription) {
+            // Use normal weights when description is present
+            weights = {
+                short_description: 0.40,  // Increased from 35%
+                description: 0.40,        // Increased from 35%
+                category: 0.20            // Removed source field
+            };
+        } else {
+            // Use adjusted weights when description is missing
+            // Give 80% weight to short_description, distribute remaining 20%
+            weights = {
+                short_description: 0.80,  // 80% weight for mandatory field
+                description: 0.00,        // 0% since it's missing
+                category: 0.20           // Removed source field
+            };
+        }
+        
+        // Debug logging for weight analysis
+        console.log('🎫 TICKET WEIGHT ANALYSIS:');
+        console.log('📋 Ticket ID:', ticket.ticket_id);
+        console.log('📝 Has Description:', hasDescription);
+        console.log('⚖️  Applied Weights:', weights);
+        console.log('📄 Field Contents:');
+        console.log('   - short_description:', ticket.short_description?.substring(0, 100) + (ticket.short_description?.length > 100 ? '...' : ''));
+        console.log('   - description:', ticket.description ? (ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : '')) : 'MISSING');
+        console.log('   - category:', ticket.category || 'MISSING');
+        console.log('   - source:', ticket.source || 'MISSING');
+        
         // Use shared utility for consistent text processing
-        return createWeightedText(ticket, this.config.textProcessing.fieldWeights);
+        const result = createWeightedText(ticket, weights);
+        
+        console.log('🔤 Generated Text Length:', result.length);
+        console.log('📊 Weight Distribution:');
+        for (const [field, weight] of Object.entries(weights)) {
+            const repeatCount = Math.ceil(weight * 10);
+            console.log(`   - ${field}: ${(weight * 100).toFixed(1)}% (repeated ${repeatCount} times)`);
+        }
+        console.log('---');
+        
+        return result;
     }
 
     /**

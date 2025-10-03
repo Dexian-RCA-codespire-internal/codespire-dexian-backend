@@ -4,7 +4,6 @@
  */
 
 const { validationResult } = require('express-validator');
-const resolutionService = require('../agents/ticket-resolution/service');
 const { serviceNowResolutionService } = require('../services/servicenowResolutionService');
 const RCAResolved = require('../models/RCAResolved');
 
@@ -26,19 +25,21 @@ const resolveTicket = async (req, res) => {
 
         const { ticket, rootCause } = req.body;
 
-        // Resolve ticket using the resolution service
-        const resolutionResult = await resolutionService.resolveTicket(ticket, rootCause);
-
-        if (!resolutionResult.success) {
-            return res.status(400).json(resolutionResult);
-        }
+        // Create resolution data without using agent
+        const resolutionData = {
+            rootCause,
+            closeCode: 'Solution provided', // Default resolution code
+            customerSummary: rootCause, // Use rootCause as close_notes
+            problemStatement: extractProblemStatement(ticket),
+            analysis: 'Resolution completed without agent analysis'
+        };
 
         // Save resolution to database and update ServiceNow
         const saveResult = await serviceNowResolutionService.saveAndUpdateResolution(
             ticket,
             {
-                ...resolutionResult.resolution,
-                processing_time_ms: resolutionResult.processing_time_ms
+                ...resolutionData,
+                processing_time_ms: 0
             }
         );
 
@@ -65,6 +66,27 @@ const resolveTicket = async (req, res) => {
         });
     }
 };
+
+/**
+ * Extract problem statement from ticket data
+ */
+function extractProblemStatement(ticket) {
+    const parts = [];
+    
+    if (ticket.short_description) {
+        parts.push(`Issue: ${ticket.short_description}`);
+    }
+    
+    if (ticket.description) {
+        parts.push(`Description: ${ticket.description}`);
+    }
+    
+    if (ticket.category) {
+        parts.push(`Category: ${ticket.category}`);
+    }
+    
+    return parts.join('\n');
+}
 
 module.exports = {
     resolveTicket

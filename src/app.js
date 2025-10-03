@@ -152,27 +152,8 @@ app.use((req, res, next) => {
   next();
 });
 
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check endpoint
- *     description: Returns the current health status of the server
- *     tags:
- *       - Health
- *     responses:
- *       200:
- *         description: Server is healthy
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/HealthCheck'
- *             example:
- *               status: "OK"
- *               timestamp: "2024-01-15T10:30:00.000Z"
- *               uptime: 3600
- */
-app.get('/api/v1/health', (req, res) => {
+// Health check endpoint
+app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),

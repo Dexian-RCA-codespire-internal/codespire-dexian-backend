@@ -101,7 +101,23 @@ async function searchSimilar(qdrantClient, collectionName, queryVector, topK = 1
  */
 async function storeDocument(qdrantClient, collectionName, vector, payload, pointId = null) {
     try {
-        const id = pointId || crypto.randomUUID();
+        // Generate a valid UUID for Qdrant (it doesn't accept MongoDB ObjectId strings)
+        let id;
+        if (pointId) {
+            // If pointId is provided, try to use it, but fallback to UUID if it's not valid
+            if (typeof pointId === 'string' && pointId.length === 24 && /^[0-9a-fA-F]+$/.test(pointId)) {
+                // This is a MongoDB ObjectId, convert to UUID
+                id = crypto.randomUUID();
+            } else if (typeof pointId === 'number' || (typeof pointId === 'string' && /^[0-9]+$/.test(pointId))) {
+                // This is a valid integer ID
+                id = pointId;
+            } else {
+                // Use as-is if it's already a valid UUID or other format
+                id = pointId;
+            }
+        } else {
+            id = crypto.randomUUID();
+        }
         
         const point = {
             id: id,

@@ -15,7 +15,8 @@ const generateSolutions = async (req, res) => {
             currentTicket, 
             similarTickets = [], 
             rootCauses = [], 
-            impactData = [] 
+            impactData = [],
+            playbooks = []
         } = req.body;
 
         // Validate request body
@@ -32,7 +33,8 @@ const generateSolutions = async (req, res) => {
             hasCurrentTicket: !!currentTicket,
             similarTicketsCount: similarTickets?.length || 0,
             rootCausesCount: rootCauses?.length || 0,
-            impactDataCount: impactData?.length || 0
+            impactDataCount: impactData?.length || 0,
+            playbooksCount: playbooks?.length || 0
         });
 
         // Call the solution generation agent
@@ -40,7 +42,8 @@ const generateSolutions = async (req, res) => {
             currentTicket,
             similarTickets,
             rootCauses,
-            impactData
+            impactData,
+            playbooks
         );
 
         console.log('✅ Solution generation completed, success:', result?.success);
@@ -73,6 +76,7 @@ const generateSolutionsStream = async (req, res) => {
             similarTickets = [], 
             rootCauses = [], 
             impactData = [],
+            playbooks = [],
             socketId
         } = req.body;
 
@@ -99,6 +103,7 @@ const generateSolutionsStream = async (req, res) => {
             similarTickets,
             rootCauses,
             impactData,
+            playbooks,
             { streaming: true, socketId }
         );
 
@@ -174,13 +179,14 @@ const healthCheck = async (req, res) => {
  */
 const validateInput = async (req, res) => {
     try {
-        const { currentTicket, similarTickets, rootCauses, impactData } = req.body;
+        const { currentTicket, similarTickets, rootCauses, impactData, playbooks } = req.body;
 
         const validation = solutionGenerationAgent.validateSolutionInput({
             currentTicket,
             similarTickets,
             rootCauses,
-            impactData
+            impactData,
+            playbooks
         });
 
         if (validation.isValid) {

@@ -40,9 +40,10 @@ const SOLUTION_CONFIG = defaultConfig.createRAGAgentConfig('solution-generation'
  * @param {Array} similarTickets - Array of similar tickets for reference
  * @param {Array} rootCauses - Array of identified root causes
  * @param {Array} impactData - Array of impact assessments
+ * @param {Array} playbooks - Array of playbooks for reference
  * @returns {string} Solution generation prompt
  */
-function createSolutionPrompt(currentTicket, similarTickets = [], rootCauses = [], impactData = []) {
+function createSolutionPrompt(currentTicket, similarTickets = [], rootCauses = [], impactData = [], playbooks = []) {
     // Format similar tickets
     const similarTicketsText = similarTickets.length > 0 
         ? similarTickets.map(ticket => 
@@ -72,6 +73,24 @@ function createSolutionPrompt(currentTicket, similarTickets = [], rootCauses = [
         ).join('\n\n')
         : Array.isArray(currentTicket.impact) ? currentTicket.impact.join(', ') : (currentTicket.impact || "No impact data");
 
+    // Format playbooks
+    const playbooksText = playbooks.length > 0
+        ? playbooks.map(playbook => 
+            `- Playbook ID: ${playbook.playbook_id}
+  Title: ${playbook.title}
+  Description: ${playbook.description}
+  Priority: ${playbook.priority}
+  Similarity Score: ${playbook.similarity_score}
+  Triggers:
+    ${playbook.triggers.map(trigger => 
+        `* ${trigger.title}
+      Action: ${trigger.action}
+      Expected Outcome: ${trigger.expected_outcome}
+      Resources: ${trigger.resources?.join(', ') || 'None'}`
+    ).join('\n    ')}`
+        ).join('\n\n')
+        : "No playbooks available";
+
     return `You are an expert IT solution architect and incident management specialist. Based on the provided ticket information, similar cases, identified root causes, and impact assessments, generate comprehensive step-by-step solutions.
 
 **CURRENT TICKET INFORMATION:**
@@ -97,6 +116,9 @@ ${rootCausesText}
 
 **IMPACT ASSESSMENT:**
 ${impactText}
+
+**RELEVANT PLAYBOOKS:**
+${playbooksText}
 
 **TASK:**
 Generate comprehensive solutions in JSON format with the following structure:
@@ -152,14 +174,18 @@ Generate comprehensive solutions in JSON format with the following structure:
 1. Base solutions on the identified root causes and their confidence levels
 2. Consider the priority, urgency, and business impact of the current ticket
 3. Learn from similar tickets to suggest proven solutions
-4. Provide both immediate fixes and long-term preventive measures
-5. Include detailed step-by-step instructions for each solution
-6. Specify responsible parties, timelines, and validation criteria
-7. Consider rollback plans and risk mitigation
-8. Ensure solutions are practical and implementable
-9. Order solutions by priority and effectiveness
-10. Include dependencies between solutions
-11. The description of the step should not be more than 25 words
+4. Use playbook triggers as reference for proven solutions and best practices
+5. Adapt playbook actions to the specific context of the current ticket
+6. Provide both immediate fixes and long-term preventive measures
+7. Include detailed step-by-step instructions for each solution
+8. Specify responsible parties, timelines, and validation criteria
+9. Consider rollback plans and risk mitigation
+10. Ensure solutions are practical and implementable
+11. Order solutions by priority and effectiveness
+12. Include dependencies between solutions
+13. The description of the step should not be more than 25 words
+14. When using playbook references, adapt the actions to the current ticket's specific context
+15. Combine multiple playbook approaches if relevant to create comprehensive solutions
 
 Generate 1 comprehensive solutions covering long-term approaches.`;
 }
@@ -228,15 +254,16 @@ function parseSolutionResponse(responseText) {
  * @param {Array} similarTickets - Array of similar tickets for reference
  * @param {Array} rootCauses - Array of identified root causes
  * @param {Array} impactData - Array of impact assessments
+ * @param {Array} playbooks - Array of playbooks for reference
  * @param {Object} options - Generation options
  * @returns {Promise<Object>} Solution generation result
  */
-async function generateSolutions(currentTicket, similarTickets = [], rootCauses = [], impactData = [], options = {}) {
+async function generateSolutions(currentTicket, similarTickets = [], rootCauses = [], impactData = [], playbooks = [], options = {}) {
     const startTime = Date.now();
 
     try {
         // Validate input data
-        const validation = validateSolutionInput({ currentTicket, similarTickets, rootCauses, impactData });
+        const validation = validateSolutionInput({ currentTicket, similarTickets, rootCauses, impactData, playbooks });
         if (!validation.isValid) {
             return responseFormatting.createErrorResponse(
                 'Invalid input data',
@@ -252,7 +279,7 @@ async function generateSolutions(currentTicket, similarTickets = [], rootCauses 
         );
 
         // Generate solution prompt
-        const prompt = createSolutionPrompt(currentTicket, similarTickets, rootCauses, impactData);
+        const prompt = createSolutionPrompt(currentTicket, similarTickets, rootCauses, impactData, playbooks);
 
         // Create LLM instance
         const llm = llmProvider.createLLM('gemini', {
@@ -301,6 +328,7 @@ async function generateSolutions(currentTicket, similarTickets = [], rootCauses 
                     similarTicketsUsed: similarTickets.length,
                     rootCausesAnalyzed: rootCauses.length,
                     impactFactorsConsidered: impactData.length,
+                    playbooksReferenced: playbooks.length,
                     processingTimeMs: processingTime,
                     generatedAt: new Date().toISOString()
                 }
@@ -324,7 +352,7 @@ async function generateSolutions(currentTicket, similarTickets = [], rootCauses 
  * @returns {Object} Validation result
  */
 function validateSolutionInput(input) {
-    const { currentTicket, similarTickets, rootCauses, impactData } = input;
+    const { currentTicket, similarTickets, rootCauses, impactData, playbooks } = input;
     const errors = [];
 
     // Validate current ticket
@@ -348,6 +376,9 @@ function validateSolutionInput(input) {
     }
     if (impactData && !Array.isArray(impactData)) {
         errors.push('Impact data must be an array');
+    }
+    if (playbooks && !Array.isArray(playbooks)) {
+        errors.push('Playbooks must be an array');
     }
 
     return {
@@ -406,7 +437,8 @@ function getCapabilities() {
             'currentTicket (required)',
             'similarTickets (optional)',
             'rootCauses (optional)',
-            'impactData (optional)'
+            'impactData (optional)',
+            'playbooks (optional)'
         ],
         outputFormat: 'Structured JSON with solutions, implementation plan, and preventive measures',
         llmProvider: SOLUTION_CONFIG.providers.llm,

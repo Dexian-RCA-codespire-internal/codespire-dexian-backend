@@ -1,5 +1,6 @@
 // new file servicenow
 const Playbook = require('../models/Playbook');
+const playbookVectorizationService = require('./playbookVectorizationService');
 
 class PlaybookService {
   /**
@@ -81,7 +82,7 @@ class PlaybookService {
   async createPlaybook(playbookData) {
     try {
       // Validate required fields
-      const requiredFields = ['playbook_id', 'title', 'description', 'steps', 'outcome'];
+      const requiredFields = ['playbook_id', 'title', 'description', 'triggers'];
       for (const field of requiredFields) {
         if (!playbookData[field]) {
           return {
@@ -91,22 +92,22 @@ class PlaybookService {
         }
       }
 
-      // Validate steps
-      if (!Array.isArray(playbookData.steps) || playbookData.steps.length === 0) {
+      // Validate triggers
+      if (!Array.isArray(playbookData.triggers) || playbookData.triggers.length === 0) {
         return {
           success: false,
-          error: 'At least one step is required'
+          error: 'At least one trigger is required'
         };
       }
 
-      // Validate each step
-      for (const step of playbookData.steps) {
-        const stepRequiredFields = ['step_id', 'title', 'action', 'expected_outcome'];
-        for (const field of stepRequiredFields) {
-          if (!step[field]) {
+      // Validate each trigger
+      for (const trigger of playbookData.triggers) {
+        const triggerRequiredFields = ['trigger_id', 'title', 'action', 'expected_outcome'];
+        for (const field of triggerRequiredFields) {
+          if (!trigger[field]) {
             return {
               success: false,
-              error: `Missing required field in step: ${field}`
+              error: `Missing required field in trigger: ${field}`
             };
           }
         }
@@ -114,6 +115,16 @@ class PlaybookService {
 
       const playbook = new Playbook(playbookData);
       const savedPlaybook = await playbook.save();
+      
+      // Store in vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.storePlaybookVector(savedPlaybook);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook saved to MongoDB but failed to store in vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook saved to MongoDB but vector storage failed:', vectorError.message);
+      }
       
       return {
         success: true,
@@ -143,23 +154,23 @@ class PlaybookService {
    */
   async updatePlaybook(id, updateData) {
     try {
-      // Validate steps if provided
-      if (updateData.steps) {
-        if (!Array.isArray(updateData.steps) || updateData.steps.length === 0) {
+      // Validate triggers if provided
+      if (updateData.triggers) {
+        if (!Array.isArray(updateData.triggers) || updateData.triggers.length === 0) {
           return {
             success: false,
-            error: 'At least one step is required'
+            error: 'At least one trigger is required'
           };
         }
 
-        // Validate each step
-        for (const step of updateData.steps) {
-          const stepRequiredFields = ['step_id', 'title', 'action', 'expected_outcome'];
-          for (const field of stepRequiredFields) {
-            if (!step[field]) {
+        // Validate each trigger
+        for (const trigger of updateData.triggers) {
+          const triggerRequiredFields = ['trigger_id', 'title', 'action', 'expected_outcome'];
+          for (const field of triggerRequiredFields) {
+            if (!trigger[field]) {
               return {
                 success: false,
-                error: `Missing required field in step: ${field}`
+                error: `Missing required field in trigger: ${field}`
               };
             }
           }
@@ -177,6 +188,16 @@ class PlaybookService {
           success: false,
           error: 'Playbook not found'
         };
+      }
+
+      // Update in vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.updatePlaybookVector(playbook);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook updated in MongoDB but failed to update in vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook updated in MongoDB but vector update failed:', vectorError.message);
       }
 
       return {
@@ -218,6 +239,16 @@ class PlaybookService {
           success: false,
           error: 'Playbook not found'
         };
+      }
+
+      // Delete from vector database simultaneously
+      try {
+        const vectorResult = await playbookVectorizationService.deletePlaybookVector(id);
+        if (!vectorResult.success) {
+          console.warn('⚠️ Playbook deleted from MongoDB but failed to delete from vector database:', vectorResult.error);
+        }
+      } catch (vectorError) {
+        console.warn('⚠️ Playbook deleted from MongoDB but vector deletion failed:', vectorError.message);
       }
 
       return {
@@ -370,6 +401,124 @@ class PlaybookService {
   }
 
   /**
+   * Search playbooks using vector similarity
+   */
+  async searchPlaybooksByVector(query, options = {}) {
+    try {
+      const result = await playbookVectorizationService.searchSimilarPlaybooks(query, options);
+      return result;
+    } catch (error) {
+      console.error('Error searching playbooks by vector:', error);
+      return {
+        success: false,
+        error: 'Failed to search playbooks by vector',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Hybrid search combining text search and vector similarity
+   */
+  async hybridSearchPlaybooks(query, options = {}) {
+    try {
+      const { 
+        vectorWeight = 0.7, 
+        textWeight = 0.3, 
+        maxResults = 10,
+        filters = {}
+      } = options;
+
+      // Perform both searches in parallel
+      const [vectorResults, textResults] = await Promise.all([
+        this.searchPlaybooksByVector(query, { ...options, topK: maxResults }),
+        this.searchPlaybooks(query)
+      ]);
+
+      if (!vectorResults.success && !textResults.success) {
+        return {
+          success: false,
+          error: 'Both vector and text search failed'
+        };
+      }
+
+      // Combine and score results
+      const combinedResults = new Map();
+      
+      // Add vector results with vector weight
+      if (vectorResults.success && vectorResults.data) {
+        vectorResults.data.forEach(playbook => {
+          const score = playbook.similarity_score * vectorWeight;
+          combinedResults.set(playbook.playbook_id, {
+            ...playbook,
+            combined_score: score,
+            search_type: 'vector'
+          });
+        });
+      }
+
+      // Add text results with text weight
+      if (textResults.success && textResults.data) {
+        textResults.data.forEach(playbook => {
+          const existing = combinedResults.get(playbook.playbook_id);
+          if (existing) {
+            // Combine scores for playbooks found in both searches
+            existing.combined_score += textWeight;
+            existing.search_type = 'hybrid';
+          } else {
+            // Add new playbook with text weight
+            combinedResults.set(playbook.playbook_id, {
+              ...playbook,
+              combined_score: textWeight,
+              search_type: 'text'
+            });
+          }
+        });
+      }
+
+      // Sort by combined score and limit results
+      const finalResults = Array.from(combinedResults.values())
+        .sort((a, b) => b.combined_score - a.combined_score)
+        .slice(0, maxResults);
+
+      return {
+        success: true,
+        data: finalResults,
+        count: finalResults.length,
+        query: query,
+        search_type: 'hybrid',
+        weights: {
+          vector: vectorWeight,
+          text: textWeight
+        }
+      };
+    } catch (error) {
+      console.error('Error in hybrid search:', error);
+      return {
+        success: false,
+        error: 'Failed to perform hybrid search',
+        details: error.message
+      };
+    }
+  }
+
+  /**
+   * Get vectorization service health status
+   */
+  async getVectorizationHealth() {
+    try {
+      return await playbookVectorizationService.getHealthStatus();
+    } catch (error) {
+      console.error('Error getting vectorization health:', error);
+      return {
+        success: false,
+        error: 'Failed to get vectorization health',
+        details: error.message
+      };
+    }
+  }
+
+  /**
    * Get playbook statistics
    */
   async getPlaybookStats() {
@@ -402,6 +551,32 @@ class PlaybookService {
         error: 'Failed to get playbook statistics',
         details: error.message
       };
+    }
+  }
+
+  /**
+   * Get playbooks by their IDs
+   * @param {Array} playbookIds - Array of playbook IDs
+   * @returns {Promise<Array>} Array of playbooks
+   */
+  async getPlaybooksByIds(playbookIds) {
+    try {
+      console.log('🔍 Getting playbooks by IDs:', playbookIds);
+      
+      if (!Array.isArray(playbookIds) || playbookIds.length === 0) {
+        throw new Error('playbookIds must be a non-empty array');
+      }
+
+      const playbooks = await Playbook.find({
+        playbook_id: { $in: playbookIds },
+        is_active: true
+      }).sort({ createdAt: -1 });
+
+      console.log(`✅ Found ${playbooks.length} playbooks by IDs`);
+      return playbooks;
+    } catch (error) {
+      console.error('❌ Error getting playbooks by IDs:', error);
+      throw error;
     }
   }
 }

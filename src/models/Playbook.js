@@ -1,8 +1,8 @@
 // new file servicenow
 const mongoose = require('mongoose');
 
-const StepSchema = new mongoose.Schema({
-  step_id: { type: Number, required: true },
+const TriggerSchema = new mongoose.Schema({
+  trigger_id: { type: Number, required: true },
   title: { type: String, required: true },
   action: { type: String, required: true },
   expected_outcome: { type: String, required: true },
@@ -42,19 +42,15 @@ const PlaybookSchema = new mongoose.Schema({
     type: String, 
     default: '85%' 
   },
-  steps: { 
-    type: [StepSchema], 
+  triggers: { 
+    type: [TriggerSchema], 
     required: true,
     validate: {
-      validator: function(steps) {
-        return steps && steps.length > 0;
+      validator: function(triggers) {
+        return triggers && triggers.length > 0;
       },
-      message: 'At least one step is required'
+      message: 'At least one trigger is required'
     }
-  },
-  outcome: { 
-    type: String, 
-    required: true 
   },
   created_by: { 
     type: String, 
@@ -67,6 +63,14 @@ const PlaybookSchema = new mongoose.Schema({
 }, {
   timestamps: true, // adds createdAt and updatedAt
   collection: 'playbooks'
+});
+
+// Custom validation to ensure triggers are provided
+PlaybookSchema.pre('validate', function(next) {
+  if (!this.triggers || this.triggers.length === 0) {
+    return next(new Error('At least one trigger is required'));
+  }
+  next();
 });
 
 // Indexes for better query performance
@@ -120,7 +124,7 @@ PlaybookSchema.statics.searchPlaybooks = function(searchTerm) {
 };
 
 PlaybookSchema.statics.findActivePlaybooks = function() {
-  return this.find({ is_active: true }).sort({ created_at: -1 });
+  return this.find({ is_active: true }).sort({ createdAt: -1 }).limit(1000);
 };
 
 // Pre-save middleware to ensure unique playbook_id
