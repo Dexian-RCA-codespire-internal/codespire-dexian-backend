@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 
 // Import route modules
-const authRoutes = require('./auth');
+// const authRoutes = require('./auth'); // Removed - using SuperTokens built-in routes
+
+const emailVerificationRoutes = require('./emailVerification'); // SuperTokens-based email verification
 const llmRoutes = require('./llm');
 const s3Routes = require('./s3');
 const chatRoutes = require('./chat');
@@ -10,6 +12,7 @@ const ticketsRoutes = require('./tickets');
 const servicenowPollingRoutes = require('./servicenowPolling');
 const ticketSimilarityRoutes = require('./ticketSimilarity');
 const ticketResolutionRoutes = require('./ticketResolution');
+const usersRoutes = require('./users');
 const notificationsRoutes = require('./notifications');
 const slaRoutes = require('./sla');
 const slaMonitoringRoutes = require('./slaMonitoring');
@@ -25,7 +28,10 @@ const rcaRootCauseRoutes = require('./rcaRootCause');
 const solutionGenerationRoutes = require('./solutionGeneration');
 
 // Mount routes
-router.use('/auth', authRoutes);
+// router.use('/auth', authRoutes); // Removed - using SuperTokens built-in routes
+
+router.use('/email-verification', emailVerificationRoutes); // SuperTokens-based email verification
+router.use('/users', usersRoutes); // User management routes
 router.use('/llm', llmRoutes);
 router.use('/s3', s3Routes);
 router.use('/tickets', ticketsRoutes);
@@ -54,7 +60,9 @@ router.get('/', (req, res) => {
     description: 'Microservice backend with AI-powered ticket management and automatic API documentation',
     endpoints: {
       health: '/health',
-      auth: '/auth',
+      auth: '/auth (SuperTokens built-in)',
+      users: '/users/profile, /users (admin), /users/{id}/role (admin)',
+      emailVerification: '/email-verification/send-otp, /email-verification/send-magic-link, /email-verification/verify-otp, /email-verification/resend',
       llm: '/llm',
       s3: '/s3',
       tickets: '/tickets',

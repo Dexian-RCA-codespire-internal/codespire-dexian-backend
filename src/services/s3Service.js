@@ -1,11 +1,14 @@
-const AWS = require('aws-sdk');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const config = require('../config');
 
 class S3Service {
   constructor() {
-    this.s3 = new AWS.S3({
-      accessKeyId: config.storage.aws.accessKeyId,
-      secretAccessKey: config.storage.aws.secretAccessKey,
+    this.s3Client = new S3Client({
+      credentials: {
+        accessKeyId: config.storage.aws.accessKeyId,
+        secretAccessKey: config.storage.aws.secretAccessKey,
+      },
       region: config.storage.aws.region
     });
     this.bucket = config.storage.aws.bucket;
@@ -13,20 +16,20 @@ class S3Service {
 
   async uploadFile(fileBuffer, fileName, contentType = 'application/octet-stream') {
     try {
-      const params = {
+      const command = new PutObjectCommand({
         Bucket: this.bucket,
         Key: fileName,
         Body: fileBuffer,
         ContentType: contentType,
         ACL: 'private'
-      };
+      });
 
-      const result = await this.s3.upload(params).promise();
+      const result = await this.s3Client.send(command);
       return {
         success: true,
-        url: result.Location,
-        key: result.Key,
-        bucket: result.Bucket,
+        url: `https://${this.bucket}.s3.${config.storage.aws.region}.amazonaws.com/${fileName}`,
+        key: fileName,
+        bucket: this.bucket,
         etag: result.ETag
       };
     } catch (error) {
@@ -37,12 +40,12 @@ class S3Service {
 
   async downloadFile(fileName) {
     try {
-      const params = {
+      const command = new GetObjectCommand({
         Bucket: this.bucket,
         Key: fileName
-      };
+      });
 
-      const result = await this.s3.getObject(params).promise();
+      const result = await this.s3Client.send(command);
       return {
         success: true,
         data: result.Body,
@@ -58,12 +61,12 @@ class S3Service {
 
   async deleteFile(fileName) {
     try {
-      const params = {
+      const command = new DeleteObjectCommand({
         Bucket: this.bucket,
         Key: fileName
-      };
+      });
 
-      await this.s3.deleteObject(params).promise();
+      await this.s3Client.send(command);
       return {
         success: true,
         message: 'File deleted successfully'
@@ -76,13 +79,13 @@ class S3Service {
 
   async listFiles(prefix = '', maxKeys = 1000) {
     try {
-      const params = {
+      const command = new ListObjectsV2Command({
         Bucket: this.bucket,
         Prefix: prefix,
         MaxKeys: maxKeys
-      };
+      });
 
-      const result = await this.s3.listObjectsV2(params).promise();
+      const result = await this.s3Client.send(command);
       return {
         success: true,
         files: result.Contents || [],
@@ -97,13 +100,22 @@ class S3Service {
 
   async generatePresignedUrl(fileName, operation = 'getObject', expiresIn = 3600) {
     try {
-      const params = {
-        Bucket: this.bucket,
-        Key: fileName,
-        Expires: expiresIn
-      };
+      let command;
+      if (operation === 'getObject') {
+        command = new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: fileName
+        });
+      } else if (operation === 'putObject') {
+        command = new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: fileName
+        });
+      } else {
+        throw new Error('Unsupported operation for presigned URL');
+      }
 
-      const url = await this.s3.getSignedUrlPromise(operation, params);
+      const url = await getSignedUrl(this.s3Client, command, { expiresIn });
       return {
         success: true,
         url,
@@ -118,12 +130,12 @@ class S3Service {
 
   async getFileMetadata(fileName) {
     try {
-      const params = {
+      const command = new HeadObjectCommand({
         Bucket: this.bucket,
         Key: fileName
-      };
+      });
 
-      const result = await this.s3.headObject(params).promise();
+      const result = await this.s3Client.send(command);
       return {
         success: true,
         metadata: result.Metadata,

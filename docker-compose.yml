@@ -105,6 +105,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRESQL_CONNECTION_URI: postgresql://${POSTGRES_USER:-supertokens}:${POSTGRES_PASSWORD:-supertokens123}@postgres:5432/${POSTGRES_DB:-supertokens}
+      # Token lifetime configuration - SINGLE SOURCE OF TRUTH
+      ACCESS_TOKEN_VALIDITY: ${ACCESS_TOKEN_SECONDS:-120}  # 2 minutes in seconds
+      REFRESH_TOKEN_VALIDITY: ${REFRESH_TOKEN_MINUTES:-5}  # 5 minutes
     ports:
       - "3567:3567"
     depends_on:
