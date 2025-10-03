@@ -2,12 +2,15 @@
 const axios = require('axios');
 const config = require('../config');
 const Ticket = require('../models/Tickets');
+const User = require('../models/User');
 const { webSocketService } = require('./websocketService');
 const { notificationService } = require('./notificationService');
 const { createOrUpdateSLA } = require('./slaService');
 const mongoose = require('mongoose');
 const ticketVectorizationService = require('./ticketVectorizationService');
 const moment = require('moment-timezone');
+const emailService = require('./emailService');
+
 // Bulk Import State Schema
 const bulkImportStateSchema = new mongoose.Schema({
   service: { type: String, default: 'servicenow', unique: true },
@@ -285,6 +288,35 @@ const fetchTicketsAndSave = async (options = {}) => {
             
             // Emit WebSocket event for new ticket
             webSocketService.emitNewTicket(newTicket.toObject());
+            
+            // Send email notification for new ticket
+            // COMMENTED OUT: Email sending disabled
+            /*
+            try {
+              const user = await User.find({ status: 'active' });
+              const emails = user.map(user => user.email);
+              if (user) {
+                const ticketEmailData = {
+                  ticketId: savedTicket.ticket_id,
+                  mongoId: savedTicket._id,
+                  title: savedTicket.short_description || 'New Ticket',
+                  description: savedTicket.description || 'Ticket description not available',
+                  priority: savedTicket.priority || 'Normal',
+                  assignee: 'System',
+                  createdBy: 'ServiceNow',
+                  createdAt: savedTicket.createdAt,
+                  category: savedTicket.category || 'General',
+                  ticketUrl: `http://localhost:3001/analysis/${savedTicket._id}/${savedTicket.ticket_id}`,
+                  slaHours: 24
+                };
+                await emailService.sendNewTicketEmailTemplate(emails, ticketEmailData);
+                console.log(`✅ New ticket email sent to ${emails.join(', ')}`);
+              }
+            } catch (emailError) {
+              console.error('❌ Email notification failed:', emailError.message);
+            }
+            */
+            
             // Persist notification for new ticket
             await notificationService.createAndBroadcast({
               title: "New ticket",
@@ -462,7 +494,6 @@ const bulkImportAllTickets = async (options = {}) => {
       };
 
       const response = await apiClient.get(config.servicenow.apiEndpoint, { params });
-
       if (response.status === 200 && response.data.result) {
         const tickets = response.data.result;
         allTickets = allTickets.concat(tickets);
@@ -536,10 +567,23 @@ const bulkImportAllTickets = async (options = {}) => {
           // Create new ticket
           try {
             const newTicket = new Ticket(ticketDoc);
-            savedTicket = await newTicket.save();
+            savedTicket = await newTicket.save();//savibng bulk update
             savedCount++;
             isNewTicket = true;
-            
+            // const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticketDoc, savedTicket._id);
+            // Vectorize and store in Qdrant ONLY for new tickets
+        if (isNewTicket) {
+          try {
+            const vectorResult = await ticketVectorizationService.vectorizeAndStoreTicket(ticketDoc, savedTicket._id);
+            if (vectorResult.success) {
+              vectorizedCount++;
+            } else {
+              console.log(`⚠️ Failed to vectorize ticket ${ticketData.number}: ${vectorResult.reason || vectorResult.error}`);
+            }
+          } catch (vectorError) {
+            console.error(`❌ Error vectorizing ticket ${ticketData.number}:`, vectorError.message);
+          }
+        }
             // Create SLA record for new ticket
             try {
               const slaResult = await createOrUpdateSLA(savedTicket);
