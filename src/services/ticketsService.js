@@ -406,16 +406,16 @@ const updateTicketById = async (ticketId, updateData, source = 'ServiceNow') => 
     try {
       if (previousStatus !== updatedTicket.status) {
         // Status changed
-        await notificationService.createAndBroadcast({
-          title: "Ticket status changed",
-          message: `Ticket ${updatedTicket.ticket_id} status: ${previousStatus} → ${updatedTicket.status}`,
-          type: "info",
-          related: {
-            ticketMongoId: updatedTicket._id,
-            ticket_id: updatedTicket.ticket_id,
-            eventType: "status_changed"
-          }
-        });
+        // await notificationService.createAndBroadcast({
+        //   title: "Ticket status changed",
+        //   message: `Ticket ${updatedTicket.ticket_id} status: ${previousStatus} → ${updatedTicket.status}`,
+        //   type: "info",
+        //   related: {
+        //     ticketMongoId: updatedTicket._id,
+        //     ticket_id: updatedTicket.ticket_id,
+        //     eventType: "status_changed"
+        //   }
+        // });
       } 
 
     } catch (notificationError) {
