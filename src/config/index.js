@@ -25,23 +25,21 @@ const config = {
     appName: process.env.SUPERTOKENS_APP_NAME || 'your-app-name',
     appDomain: process.env.SUPERTOKENS_APP_DOMAIN || 'http://localhost:3001',
     apiDomain: process.env.SUPERTOKENS_API_DOMAIN || 'http://localhost:8081',
-    // Token lifetime configuration - SINGLE SOURCE OF TRUTH
+    
+    // Token validity configuration - UNIFIED to use minutes only
     // Set these in your .env file:
-    // ACCESS_TOKEN_MINUTES=60    (access token lifetime in minutes - 1 hour)
-    // REFRESH_TOKEN_MINUTES=1440 (refresh token lifetime in minutes - 24 hours)
+    // ACCESS_TOKEN_MINUTES=60    (access token lifetime in minutes)
+    // REFRESH_TOKEN_MINUTES=2880 (refresh token lifetime in minutes)
     accessTokenMinutes: parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60,
-    refreshTokenMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
+    refreshTokenMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 2880,
     
-    // Convert to milliseconds for application use
-    accessTokenValidity: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60 * 1000,
-    refreshTokenValidity: (parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440) * 60 * 1000,
-    
-    // Convert to seconds/minutes for SuperTokens core
-    accessTokenValiditySeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60,
-    refreshTokenValidityMinutes: parseInt(process.env.REFRESH_TOKEN_MINUTES) || 1440,
-    
-    // For docker-compose environment variables
-    accessTokenSeconds: (parseInt(process.env.ACCESS_TOKEN_MINUTES) || 60) * 60
+    // SuperTokens core expects milliseconds - convert from minutes
+    get accessTokenValidity() {
+      return this.accessTokenMinutes * 60 * 1000;
+    },
+    get refreshTokenValidity() {
+      return this.refreshTokenMinutes * 60 * 1000;
+    }
   },
 
   

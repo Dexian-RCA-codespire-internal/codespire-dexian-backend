@@ -14,14 +14,11 @@ const EmailVerificationService = require('../services/emailVerificationService')
 const initSuperTokens = () => {
   console.log('🔧 Initializing SuperTokens...');
   
-  // Log token configuration
-  console.log(`🔐 Token Configuration (Single Source of Truth):`);
+  // Log simplified token configuration
+  console.log(`🔐 Token Configuration:`);
   console.log(`   Access Token: ${config.supertokens.accessTokenMinutes} minutes`);
   console.log(`   Refresh Token: ${config.supertokens.refreshTokenMinutes} minutes`);
-  console.log(`   Access Token (ms): ${config.supertokens.accessTokenValidity}`);
-  console.log(`   Refresh Token (ms): ${config.supertokens.refreshTokenValidity}`);
-  console.log(`   Access Token (seconds): ${config.supertokens.accessTokenValiditySeconds}`);
-  console.log(`   Refresh Token (minutes): ${config.supertokens.refreshTokenValidityMinutes}`);
+  
   supertokens.init({
     framework: 'express',
     supertokens: {
@@ -579,9 +576,11 @@ const initSuperTokens = () => {
         invalidClaimStatusCode: 403,
         // Enhanced session configuration
         useDynamicAccessTokenSigningKey: true,
-        // Session lifetime configuration (configurable via environment variables)
-        accessTokenValidity: config.supertokens.accessTokenValidity,
-        refreshTokenValidity: config.supertokens.refreshTokenValidity,
+        // Session lifetime configuration (using correct SuperTokens parameter names)
+        // Based on SuperTokens documentation: accessTokenLifetime in minutes, refreshTokenValidityPeriod in days
+        accessTokenLifetime: config.supertokens.accessTokenMinutes, 
+        // Convert minutes to fraction of days for SuperTokens
+        refreshTokenValidityPeriod: config.supertokens.refreshTokenMinutes / (24 * 60),
         // Enable single session per user (optional - can be disabled for multi-device)
         // useDynamicAccessTokenSigningKey: true,
         override: {
